@@ -16,7 +16,7 @@
 <p align="center">
   <a href="https://github.com/WUMING-H/love-reply/stargazers"><img src="https://img.shields.io/github/stars/WUMING-H/love-reply?style=social" alt="GitHub Stars"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/Python-3.9%2B-blue.svg" alt="Python 3.9+">
+  <img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python 3.10+">
 </p>
 
 The moment you freeze in a chat window is rarely about not knowing what to say. It is about not knowing **what that message meant**. "哦" could be *got it*, or *I'm upset*. "下周" could be asking for a date, or checking whether you remembered. Guess wrong and no amount of polish saves you.
@@ -97,7 +97,7 @@ git clone https://github.com/WUMING-H/love-reply.git
 cp -r love-reply ~/.claude/skills/love-reply     # or ~/.workbuddy/skills/
 ```
 
-Requires Python 3.9+ standard library only. The style tool installs nothing and makes no network calls.
+Requires Python 3.10+ standard library only (CI covers 3.10 / 3.12 / 3.13). The style tool installs nothing and makes no network calls.
 
 ## Usage
 

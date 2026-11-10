@@ -11,8 +11,12 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.9", "3.12"]
+        # 只用标准库，3.10 起都能跑。
+        # 3.9 已于 2025-10 停止维护，且 ubuntu-latest(24.04) 上无对应的
+        # setup-python 构建，故不再纳入 CI；旧解释器上脚本本身仍可运行。
+        python-version: ["3.10", "3.12", "3.13"]
 
     steps:
       - uses: actions/checkout@v4

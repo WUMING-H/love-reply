@@ -16,7 +16,7 @@
 <p align="center">
   <a href="https://github.com/WUMING-H/love-reply/stargazers"><img src="https://img.shields.io/github/stars/WUMING-H/love-reply?style=social" alt="GitHub Stars"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/Python-3.9%2B-blue.svg" alt="Python 3.9+">
+  <img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/backend-none-brightgreen.svg" alt="No backend">
 </p>
 
@@ -160,7 +160,7 @@ cp -r love-reply ~/.claude/skills/love-reply
 
 Windows 上直接放进 skills 目录即可；如果本体想放在别的盘，用目录联接指过去（`mklink /J`），读写都会落到真实目录。
 
-依赖只有 Python 3.9+ 标准库。风格度量与档案脚本不装任何第三方包，也不联网。
+依赖只有 Python 3.10+ 标准库（CI 覆盖 3.10 / 3.12 / 3.13）。风格度量与档案脚本不装任何第三方包，也不联网。
 
 ### 三种宿主，同一套流程
 
