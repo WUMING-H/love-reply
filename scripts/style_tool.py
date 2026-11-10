@@ -7,7 +7,7 @@
     feedback  记录用户点选或改写
     show      查看当前风格卡
 
-存储位置：%LOVE_REPLY_HOME%，未设置时用 E:\\project\\WorkBuddy\\love-reply
+存储位置：%LOVE_REPLY_HOME%，未设置时用本 Skill 目录下的 data/
 """
 
 from __future__ import annotations
@@ -56,11 +56,9 @@ def home() -> Path:
     env = os.environ.get("LOVE_REPLY_HOME")
     if env:
         p = Path(env).expanduser()
-    elif os.name == "nt" and Path("E:/project/WorkBuddy").exists():
-        # 数据和 skill 放一起，但独立在 data/ 下：更新 skill 文件时不会碰到个人数据
-        p = Path("E:/project/WorkBuddy/skills/love-reply/data")
     else:
-        p = Path.home() / ".love-reply"
+        # 数据和 skill 放一起，但独立在 data/ 下：更新 skill 文件时不会碰到个人数据
+        p = Path(__file__).resolve().parent.parent / "data"
     return p
 
 

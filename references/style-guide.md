@@ -14,7 +14,7 @@
 
 ## 2 风格卡
 
-位置：`%LOVE_REPLY_HOME%/style/{slot}.json`（默认 `E:\project\WorkBuddy\love-reply\style\`）
+位置：`%LOVE_REPLY_HOME%/style/{slot}.json`（默认 `<skill>/data/style/`）
 `slot` 取 `couple_early` / `couple_stable` / `friend` / `work` / `stranger`。
 
 **必须分槽位**，不是为精细，是为**防串味**——对女友的撒娇语气拿去回同事会出事。

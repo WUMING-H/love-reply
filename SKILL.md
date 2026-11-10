@@ -74,9 +74,11 @@ resolved       张力是否已解除
 对上一步每一条候选跑一次，`--strategy` 填这条的策略（长度上限按策略分档）：
 
 ```bash
-python "E:/project/WorkBuddy/skills/love-reply/scripts/style_tool.py" \
-  check --text "下周六开幕 我订两张" --slot couple_early --strategy minimal
+python <skill>/scripts/style_tool.py check --text "下周六开幕 我订两张" \
+  --slot couple_early --strategy minimal
 ```
+
+`<skill>` 是本 Skill 的安装目录（即 `SKILL.md` 所在的那一层）。
 
 返回 `{"ok": false, "problems": [...]}` 就照 problems 改，改完再跑一遍。
 连改两次还不过，就用未改写的版本（宁可不像，不要为像而失真）。
@@ -114,20 +116,26 @@ python "E:/project/WorkBuddy/skills/love-reply/scripts/style_tool.py" \
 ## 位置
 
 ```
-E:\project\WorkBuddy\skills\love-reply\        ← 本体在这里
-├── SKILL.md · references/ · scripts/ · licenses/
-└── data\                                       ← 你的数据，独立目录
+<skill>/                       ← 本体目录
+├── SKILL.md · references/ · scripts/ · documentation/ · licenses/
+└── data/                      ← 用户数据，独立目录，不进版本库
     ├── style/{slot}.json      风格卡
-    ├── memory.sqlite3         关系档案（可选，暂未启用）
     └── feedback.jsonl         点选 / 改写的偏好记录
 ```
 
-`C:\Users\<你>\.workbuddy\skills\love-reply` 是指向它的目录联接（junction），
-只为让技能发现机制找到本体，**不要往那里写文件**——动 E 盘那份才有效。
+数据默认写在 `<skill>/data/`，可用环境变量 `LOVE_REPLY_HOME` 改到别处。
+**数据目录与 skill 文件分开**：升级、替换 skill 文件时不会碰到用户的风格卡。
 
-脚本默认就写到上面 `data\` 下，不需要额外配置。要换地方设 `LOVE_REPLY_HOME`。
+如果 skill 目录本身在别的盘（例如通过目录联接挂载），直接写真实路径那一份，
+不要往联接的父目录另存。
 
 ## 知识库来源
 
 `references/kb/` 共 43 篇，来自开源项目 **goutoujunshi**（MIT License，Copyright (c) 2026 powerycy），
-版权声明见 `licenses/goutoujunshi-LICENSE`。未修改原文，仅按需检索。
+版权声明见 `licenses/goutoujunshi-LICENSE` 与 `NOTICE.md`。未修改原文，仅按需检索。
+
+## 更多文档
+
+`documentation/` 下有五份说明：`architecture.md`（六层契约与降级）、`flows.md`（七问判据与候选策略）、
+`knowledge-base.md`（检索规则与扩充方式）、`style-layer.md`（风格卡 schema 与阈值）、
+`safety.md`（边界、隐私、危机转介）。改动本 Skill 前先读对应那份。
