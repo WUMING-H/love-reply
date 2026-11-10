@@ -25,8 +25,12 @@ REQUIRED = [
     "references/compose.md",
     "references/style-guide.md",
     "references/profile.md",
+    "references/self.md",
+    "references/stages.md",
     "references/routes.md",
     "prompts/standalone.md",
+    "prompts/profile-interview.md",
+    "prompts/self-interview.md",
     "scripts/style_tool.py",
     "scripts/profile_tool.py",
     "licenses/goutoujunshi-LICENSE",
@@ -155,13 +159,65 @@ def check_profile() -> None:
             errors.append("档案冒烟失败：brief 没有带出雷区")
         if "认知?[低]" not in out:
             errors.append("档案冒烟失败：低置信认知没有标记问号")
-        if len(out.strip()) > profile_tool.BRIEF_MAX_CHARS + 40:
+        if len(out.strip()) > profile_tool.BRIEF_TOTAL_CHARS + 40:
             errors.append(f"档案冒烟失败：brief 输出 {len(out.strip())} 字，超出预算")
         print(f"  档案冒烟：brief {len(out.strip())} 字，雷区与低置信标记正常")
     except SystemExit as exc:  # 子命令异常退出
         errors.append(f"档案冒烟失败：命令退出码 {exc.code}")
     except Exception as exc:  # pragma: no cover
         errors.append(f"profile_tool.py 无法运行：{exc}")
+    finally:
+        if old is None:
+            os.environ.pop("LOVE_REPLY_HOME", None)
+        else:
+            os.environ["LOVE_REPLY_HOME"] = old
+
+
+def check_self_and_gate() -> None:
+    """自我档案与闸门冒烟：底线要拦得住，阶段禁止的策略也要拦得住。"""
+    import contextlib
+    import io
+    import tempfile
+
+    tmp = tempfile.mkdtemp(prefix="love-reply-self-")
+    old = os.environ.get("LOVE_REPLY_HOME")
+    os.environ["LOVE_REPLY_HOME"] = tmp
+    sys.path.insert(0, str(ROOT / "scripts"))
+    try:
+        import profile_tool
+        with contextlib.redirect_stdout(io.StringIO()):
+            profile_tool.main(["self", "init"])
+            profile_tool.main(["self", "add", "--kind", "limit", "--text", "不接受异地",
+                               "--forbid", "搬过去"])
+            profile_tool.main(["init", "--slot", "ci", "--stage", "repairing"])
+            profile_tool.main(["goal", "add", "--slot", "ci", "--kind", "advance",
+                               "--hard", "--text", "三个月内明确关系"])
+
+        hit = profile_tool.guard("我下个月搬过去", profile_tool.load_self(),
+                                 profile_tool.load("ci"), "advance", "repairing")
+        if hit["ok"]:
+            errors.append("闸门冒烟失败：踩底线且阶段禁止的候选未被拦截")
+
+        ok = profile_tool.guard("是我没安排好", profile_tool.load_self(),
+                                profile_tool.load("ci"), "repair", "repairing")
+        if not ok["ok"]:
+            errors.append(f"闸门冒烟失败：合规候选被误拦 {ok['problems']}")
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            profile_tool.main(["brief", "--slot", "ci", "--query", "她说累了"])
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            profile_tool.main(["brief", "--slot", "ci", "--query", "她说累了"])
+        out = buf.getvalue()
+        if "[我]" not in out or "目标!" not in out:
+            errors.append("自我档案冒烟失败：brief 没有带出自我段或硬目标标记")
+        if "任务" not in out:
+            errors.append("自我档案冒烟失败：brief 没有带出阶段任务")
+        print(f"  闸门冒烟：底线拦截、阶段闸门、自我段均正常（brief {len(out.strip())} 字）")
+    except SystemExit as exc:
+        errors.append(f"自我档案冒烟失败：命令退出码 {exc.code}")
+    except Exception as exc:  # pragma: no cover
+        errors.append(f"自我档案冒烟失败：{exc}")
     finally:
         if old is None:
             os.environ.pop("LOVE_REPLY_HOME", None)
@@ -188,6 +244,7 @@ def main() -> int:
     check_kb()
     check_style_tool()
     check_profile()
+    check_self_and_gate()
     check_gitignore()
 
     for w in warnings:

@@ -47,7 +47,8 @@ mklink /J "C:\Users\<你>\.workbuddy\skills\love-reply" "E:\skills\love-reply"
 ```
 data/
 ├── style/{slot}.json       风格卡
-├── profile/{slot}.json     恋爱档案
+├── profile/{slot}.json     对她的档案 + 关系目标（goals）
+├── self.json               自我档案（全局一份，不随对象变）
 └── feedback.jsonl          点选 / 改写记录
 ```
 
@@ -64,6 +65,7 @@ python scripts/profile_tool.py export --slot couple_early --out 档案.md
 ```
 
 导出的是人能读的 Markdown，可以直接看，但**不能直接导回去**——需要重建时按导出内容重新 `add`。
+自我档案单独导出：`python scripts/profile_tool.py self export --out 我.md`。
 
 **清空**：删掉 `data/` 整个目录。风格卡和档案都会没，Skill 退回安全默认继续工作。
 
@@ -75,7 +77,9 @@ python scripts/profile_tool.py export --slot couple_early --out 档案.md
 
 | 脚本 | 手工替代 |
 |---|---|
-| `profile_tool.py brief` | 读 `data/profile/{slot}.json`，按 `references/profile.md` 第 4 节的优先级自己挑 4–6 条 |
+| `profile_tool.py brief` | 读 `data/self.json` 与 `data/profile/{slot}.json`，按 `references/profile.md` 第 4 节的优先级自己挑：硬目标 → 底线 → 阶段任务 → 相关条目 4–6 条 |
+| `profile_tool.py stage` | 查 `references/stages.md` 的六阶段表，取该阶段允许/禁止的策略、细节密度、字数上限 |
+| `profile_tool.py guard` | 目测三件：候选里有没有他自己写的底线词、策略是否在该阶段被禁、有没有接住档案里的具体事实 |
 | `style_tool.py show` | 读 `data/style/{slot}.json` 的 `metrics` 和 `strategy.avoid` |
 | `style_tool.py check` | 按 `references/style-guide.md` 的硬规则目测：字数是否超上限、有没有句号、有没有 emoji、有没有 AI 味短语 |
 

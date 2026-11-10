@@ -147,6 +147,39 @@ The profile is also forbidden from touching `danger`. Danger is read from the cu
 
 Reads expire. `stale` lists what has not been confirmed in 60 days; `accept` refreshes one, `forget` drops it. A profile left untouched describes a person who no longer exists, and acting on it is worse than having none.
 
+## Stage is a gate, not a parameter
+
+The same intent — *let's meet this weekend* — has six different correct forms depending on where the relationship stands:
+
+| Stage | What you can say | Why |
+| --- | --- | --- |
+| just added | You saw that exhibition too? I went last week. | You cannot ask yet; asking is a demand |
+| talking, not met | There's a show this weekend, if you're free | You can ask, but leave an exit |
+| met 1–3 times | Saturday 2pm, I'll book two | Give a time; she only has to answer yes or no |
+| together < 6 months | Saturday 2pm, then that place you mentioned | No need to ask; assume together, add her detail |
+| stable | Which session do you want to see on Saturday? | It's a shared calendar; ask preference, not willingness |
+| repairing | (say nothing about it) | Any invitation reads as "let's bury this" |
+
+So stage is enforced as a whitelist, not a weight. `stranger` does not *score lower* for `advance` — `advance` is not allowed to exist. Scoring produces "slightly off"; gating produces "not shown", and timing errors need the latter.
+
+Three counter-intuitive rules: no `hold` when you just met (leaving space requires existing presence), no `hold` while dating (silence reads as disinterest), and **lowest detail density during repair** — "I left at six, traffic was forty minutes, I really didn't mean it" is heard as "he's building a case".
+
+There is also one mechanically checked rule: in the talking stage an invitation must contain an exit ("if you're free", "no pressure", "only if you want"). Without one it fails the gate.
+
+## Self profile and goals
+
+Knowing her is half of it. The other half is knowing what you want, which the default model never optimises for — it optimises how well the message lands, and the message that lands best is usually the reconciliatory one, even when you want out.
+
+Six kinds of self entries: `trait`, `flaw`, `limit`, `capacity`, `value`, `voice`. `limit` and `flaw` must carry literal trigger words, because the gate matches text, not meaning:
+
+```bash
+python scripts/profile_tool.py self add --kind limit   --text "不会为了恋爱换城市" --forbid 搬过去 去你那边
+```
+
+Goals have five directions — `advance`, `hold`, `repair`, `exit`, `understand` — and three horizons. Hard goals **filter**, soft goals **rank**. `exit` is the one place the stage gate relaxes: you are not maintaining the relationship, only finishing the sentence.
+
+When goal and stage conflict, stage wins. The correct output is not to abandon the goal but to say so: "this lands wrong today; first settle the thing from last week."
+
 ## Structure
 
 ```text
@@ -157,18 +190,21 @@ love-reply/
 │   ├── judge.md             # 7 questions, Chinese subtext traps, misreads
 │   ├── compose.md           # candidate strategies, danger tiers, promises
 │   ├── style-guide.md       # style card schema, cold start, few-shot
-│   ├── profile.md           # profile entries, confidence, injection, bias guards
+│   ├── profile.md           # her: 7 entries, confidence, injection, bias guards
+│   ├── self.md              # you: 6 entries, goal arbitration, self-bias traps
+│   ├── stages.md            # 6-stage matrix, evidence, migration signals
 │   ├── routes.md            # intent × stage → which 2–3 docs
 │   └── kb/                  # 43 Chinese documents (knowledge 20 / practical 23)
 ├── prompts/
 │   ├── standalone.md        # self-contained prompt for any chat model
-│   └── profile-interview.md # twelve-question intake
+│   ├── profile-interview.md # twelve questions: her profile
+│   └── self-interview.md    # twelve questions: your profile and goals
 ├── scripts/
 │   ├── style_tool.py        # profile / check / feedback / show
-│   ├── profile_tool.py      # profile CRUD, search, brief, review
+│   ├── profile_tool.py      # her / you / goals / stage card / guard
 │   └── validate_skill.py    # integrity and smoke tests
-├── documentation/           # architecture, flows, knowledge base, style, safety, portability
-└── data/                    # your cards, profile, feedback (git-ignored)
+├── documentation/           # architecture, flows, knowledge base, style, stages, self, safety
+└── data/                    # style/, profile/ (+goals), self.json, feedback (git-ignored)
 ```
 
 ## Using it in any model

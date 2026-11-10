@@ -23,7 +23,15 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Check skill integrity
-        run: python scripts/validate_skill.py
+        run: |
+          set +e
+          python scripts/validate_skill.py
+          code=$?
+          if [ $code -eq 1 ]; then
+            echo "::error::完整性检查有硬错误"
+            exit 1
+          fi
+          echo "通过（退出码 $code，2 表示只有警告）"
 
       - name: Style tool smoke test (accept)
         run: |
@@ -58,3 +66,36 @@ jobs:
           python scripts/profile_tool.py brief --slot ci --query "她说今天好累"
           python scripts/profile_tool.py stats --slot ci
           python scripts/profile_tool.py export --slot ci
+
+      - name: Self profile, goals and stage gate
+        run: |
+          export LOVE_REPLY_HOME=/tmp/lr-self
+          python scripts/profile_tool.py self init
+          python scripts/profile_tool.py self add --kind limit \
+            --text "不接受异地" --forbid 搬过去
+          python scripts/profile_tool.py self add --kind flaw \
+            --text "她一沉默就连发三条" --forbid 在吗 怎么不回
+          python scripts/profile_tool.py init --slot ci --stage repairing
+          python scripts/profile_tool.py goal add --slot ci --kind advance \
+            --hard --text "三个月内明确关系" --forbid 再看看
+          python scripts/profile_tool.py brief --slot ci --query "她说累了"
+          python scripts/profile_tool.py stage --name repairing
+
+          # 踩底线必须被拦下
+          if python scripts/profile_tool.py guard \
+            --text "我下个月搬过去" --slot ci --strategy advance; then
+            echo "::error::底线未被拦截"
+            exit 1
+          fi
+
+          # 修复期禁止 advance，必须被拦下
+          if python scripts/profile_tool.py guard \
+            --text "下周末一起出去玩吧" --slot ci --stage repairing \
+            --strategy advance; then
+            echo "::error::阶段闸门未生效"
+            exit 1
+          fi
+
+          # 合规候选必须放行
+          python scripts/profile_tool.py guard \
+            --text "是我没安排好" --slot ci --stage repairing --strategy repair
