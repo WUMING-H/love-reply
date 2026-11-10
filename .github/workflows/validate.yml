@@ -47,3 +47,14 @@ jobs:
             "那你早点睡" "明天我过去接你" "别提了 今天累成狗" > /tmp/sample.txt
           LOVE_REPLY_HOME=/tmp/lr-data python scripts/style_tool.py profile \
             --file /tmp/sample.txt --slot ci
+
+      - name: Profile tool end to end
+        run: |
+          export LOVE_REPLY_HOME=/tmp/lr-profile
+          python scripts/profile_tool.py init --slot ci --alias 她 --stage couple_early
+          python scripts/profile_tool.py add --slot ci --kind fact --text "她不吃芒果"
+          python scripts/profile_tool.py add --slot ci --kind landmine --text "她说累的时候别讲道理"
+          python scripts/profile_tool.py add --slot ci --kind promise --text "陪她看展" --due 2026-12-01
+          python scripts/profile_tool.py brief --slot ci --query "她说今天好累"
+          python scripts/profile_tool.py stats --slot ci
+          python scripts/profile_tool.py export --slot ci

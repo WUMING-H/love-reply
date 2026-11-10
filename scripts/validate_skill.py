@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -16,14 +17,18 @@ ROOT = Path(__file__).resolve().parent.parent
 
 REQUIRED = [
     "SKILL.md",
+    "AGENTS.md",
     "README.md",
     "LICENSE",
     "NOTICE.md",
     "references/judge.md",
     "references/compose.md",
     "references/style-guide.md",
+    "references/profile.md",
     "references/routes.md",
+    "prompts/standalone.md",
     "scripts/style_tool.py",
+    "scripts/profile_tool.py",
     "licenses/goutoujunshi-LICENSE",
 ]
 
@@ -124,6 +129,46 @@ def check_style_tool() -> None:
     print(f"  冒烟测试：正常句通过={good['ok']}，AI 味句拦截={not bad['ok']}")
 
 
+def check_profile() -> None:
+    """档案冒烟：建档 → 录入 → 取摘要，并确认摘要没有超出预算。"""
+    import contextlib
+    import io
+    import tempfile
+
+    tmp = tempfile.mkdtemp(prefix="love-reply-validate-")
+    old = os.environ.get("LOVE_REPLY_HOME")
+    os.environ["LOVE_REPLY_HOME"] = tmp
+    sys.path.insert(0, str(ROOT / "scripts"))
+    try:
+        import profile_tool
+        with contextlib.redirect_stdout(io.StringIO()):
+            profile_tool.main(["init", "--slot", "ci", "--alias", "她", "--stage", "couple_early"])
+            profile_tool.main(["add", "--slot", "ci", "--kind", "landmine",
+                               "--text", "她说累的时候别讲道理"])
+            profile_tool.main(["add", "--slot", "ci", "--kind", "read",
+                               "--text", "她最近很累，可能不想说话", "--confidence", "low"])
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            profile_tool.main(["brief", "--slot", "ci", "--query", "她说今天好累"])
+        out = buf.getvalue().strip()
+        if "雷区" not in out:
+            errors.append("档案冒烟失败：brief 没有带出雷区")
+        if "认知?[低]" not in out:
+            errors.append("档案冒烟失败：低置信认知没有标记问号")
+        if len(out.strip()) > profile_tool.BRIEF_MAX_CHARS + 40:
+            errors.append(f"档案冒烟失败：brief 输出 {len(out.strip())} 字，超出预算")
+        print(f"  档案冒烟：brief {len(out.strip())} 字，雷区与低置信标记正常")
+    except SystemExit as exc:  # 子命令异常退出
+        errors.append(f"档案冒烟失败：命令退出码 {exc.code}")
+    except Exception as exc:  # pragma: no cover
+        errors.append(f"profile_tool.py 无法运行：{exc}")
+    finally:
+        if old is None:
+            os.environ.pop("LOVE_REPLY_HOME", None)
+        else:
+            os.environ["LOVE_REPLY_HOME"] = old
+
+
 def check_gitignore() -> None:
     p = ROOT / ".gitignore"
     if not p.exists():
@@ -142,6 +187,7 @@ def main() -> int:
     check_routes()
     check_kb()
     check_style_tool()
+    check_profile()
     check_gitignore()
 
     for w in warnings:

@@ -126,23 +126,60 @@ Slots exist (`couple_early`, `couple_stable`, `friend`, `work`) to prevent bleed
 
 The most valuable feedback is not "option 2" but "not me, I'd say XX". Your rewrite enters the sample pool and becomes the reference next time.
 
+## Relationship profile
+
+The style card handles *sounding like you*. The profile handles *being right about her*.
+
+Seven kinds of entries, stored locally as plain JSON: `fact` (verifiable), `read` (your interpretation, with confidence), `unknown` (explicitly not known), `landmine`, `soother`, `promise` (with a due date), `event`.
+
+```bash
+python scripts/profile_tool.py init --slot couple_early --alias 她 --stage couple_early
+python scripts/profile_tool.py add --slot couple_early --kind landmine \
+  --text "她说累的时候别讲道理"
+python scripts/profile_tool.py brief --slot couple_early --query "她说今天好累"
+```
+
+**Facts and reads are kept apart on purpose.** Once an inference is written down as a fact it stops being questioned — six months later you are still acting on a conclusion that came from one misunderstanding. So reads carry a confidence level: `high` can drive decisions, `mid` only tunes tone, `low` may only produce a probing reply ("ask her, don't decide for her"). Low-confidence entries come out with a `?` marker.
+
+Two entries change output the most: **landmines** (so it never hands you a lecture when she is exhausted) and **open promises** (so it never suggests you offer something you already owe).
+
+The profile is also forbidden from touching `danger`. Danger is read from the current exchange only — a tense month does not make "what's for dinner" a 5.
+
+Reads expire. `stale` lists what has not been confirmed in 60 days; `accept` refreshes one, `forget` drops it. A profile left untouched describes a person who no longer exists, and acting on it is worse than having none.
+
 ## Structure
 
 ```text
 love-reply/
-├── SKILL.md                 # entry: six steps, output contract, hard rules
+├── SKILL.md                 # entry: eight steps, output contract, hard rules
+├── AGENTS.md                # same flow for AGENTS.md hosts (Codex, Cursor)
 ├── references/
 │   ├── judge.md             # 7 questions, Chinese subtext traps, misreads
-│   ├── compose.md           # candidate strategies, danger tiers
+│   ├── compose.md           # candidate strategies, danger tiers, promises
 │   ├── style-guide.md       # style card schema, cold start, few-shot
+│   ├── profile.md           # profile entries, confidence, injection, bias guards
 │   ├── routes.md            # intent × stage → which 2–3 docs
 │   └── kb/                  # 43 Chinese documents (knowledge 20 / practical 23)
+├── prompts/
+│   ├── standalone.md        # self-contained prompt for any chat model
+│   └── profile-interview.md # twelve-question intake
 ├── scripts/
 │   ├── style_tool.py        # profile / check / feedback / show
-│   └── validate_skill.py    # integrity and context-budget check
-├── documentation/           # architecture, flows, knowledge base, style, safety
-└── data/                    # your cards and feedback, git-ignored
+│   ├── profile_tool.py      # profile CRUD, search, brief, review
+│   └── validate_skill.py    # integrity and smoke tests
+├── documentation/           # architecture, flows, knowledge base, style, safety, portability
+└── data/                    # your cards, profile, feedback (git-ignored)
 ```
+
+## Using it in any model
+
+| Host | Entry point |
+| --- | --- |
+| WorkBuddy, Claude Code | `SKILL.md` |
+| Codex, Cursor | `AGENTS.md` |
+| Any web chat model | paste `prompts/standalone.md` |
+
+The standalone prompt is self-contained — judgement, candidates, style rules, profile section, output format. It loses the knowledge base, the measured style card and the structured profile, but the output contract is identical. See [documentation/portability.md](documentation/portability.md).
 
 ## Principles
 
