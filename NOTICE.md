@@ -28,7 +28,7 @@ best_action / need / resolved）与动作枚举的分类结构，参考了
 
 以下内容由 WUMING-H 编写，以仓库根目录的 [LICENSE](LICENSE)（MIT）授权：
 
-- `SKILL.md` 与七步流程的编排
+- `SKILL.md` 与流程编排
 - `references/` 中除 `kb/` 外的全部文件（judge / compose / style-guide / routes）
 - `scripts/style_tool.py`（风格统计、校验、回流）与 `scripts/validate_skill.py`（完整性自检）
 - `documentation/` 全部文档、`README.md` / `README_EN.md` / `CHANGELOG.md` 等

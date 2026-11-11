@@ -375,7 +375,7 @@ python scripts/profile_tool.py goal add --slot couple_early   --kind advance --h
 
 ```text
 love-reply/
-├── SKILL.md                     # 主入口：八步流程、输出契约、硬约束
+├── SKILL.md                     # 主入口：判→写→过闸三段流程、输出契约、硬约束
 ├── AGENTS.md                    # 同一流程的通用 Agent 入口（Codex / Cursor 等）
 ├── README.md / README_EN.md     # 中文 / 英文说明
 ├── references/
@@ -453,7 +453,7 @@ love-reply/
 | --- | --- | --- |
 | 判断协议的结构 | [jev-chat/jev-chat-jarvis](https://github.com/jev-chat/jev-chat-jarvis)（MIT） | 参考其固定问题集与动作枚举的组织方式；判据、示例、边界情形按中文语境重写，未复制其代码 |
 | 43 篇知识库 | [shengjidaguai-china/goutoujunshi](https://github.com/shengjidaguai-china/goutoujunshi)（MIT，Copyright (c) 2026 powerycy） | 原样收录，未改动原文；保留 `knowledge/` `practical/` 两级结构以维持文档间相对链接 |
-| 风格层、校验器、路由表、七步编排、档案设计、文档 | 本项目 | 原创 |
+| 风格层、校验器、路由表、流程编排、档案设计、文档 | 本项目 | 原创 |
 
 二次分发请保留 `LICENSE`、`licenses/goutoujunshi-LICENSE` 与本 `NOTICE.md`。详见 [NOTICE.md](NOTICE.md)。
 
