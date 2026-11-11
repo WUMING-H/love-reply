@@ -39,7 +39,9 @@
    `couple_stable` 稳定期 / `repairing` 修复期。
    看四条证据：她主动发起过吗、单独见过吗、关系说清了吗、有未解冲突吗。
    **有未解冲突一律按 `repairing`**，其他阶段的行为全部失效。判据见 `references/stages.md`，判不准就问一句。
-3. **七问**（`references/judge.md`）：`literal` · `intent`(6) · `danger`(0–9) · `give_substance` ·
+3. **事实 / 推测 / 未知分三栏。** 绝大多数焦虑来自把推测当事实用——「她三天没回我，肯定是淡了」，
+   那个「肯定」要放回「未知」。
+4. **七问**（`references/judge.md`）：`literal` · `intent`(6) · `danger`(0–9) · `give_substance` ·
    `best_action`(7) · `need`(5) · `resolved`。
    **`danger ≥ 7` 之后只允许「稳住 / 补救 / 留白」，禁止玩笑与邀约。**
 
@@ -65,6 +67,9 @@ python <skill>/scripts/profile_tool.py stage --slot couple_early
 
 知识（`references/routes.md`，按 `intent × stage` 读 2–3 篇）**只影响策略，不能进回复**。
 依恋理论、非暴力沟通、情绪价值这类词一个都不许出现。验收：把知识删掉，候选应该一个字不变。
+
+最后按风格卡改写成「他会打出来的字」（`references/style-guide.md`）。**语义冻结**：时间、地点、承诺、
+认的错一个不能丢。没有风格卡时走冷启动安全默认（短、不加句号、无 emoji），不在当次阻塞，结尾轻问一句校准。
 
 ### 过闸
 
