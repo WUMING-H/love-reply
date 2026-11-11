@@ -40,6 +40,65 @@ REQUIRED = [
 SKILL_BUDGET_BYTES = 12_000
 KB_MIN_DOCS = 40
 
+# 正文关键块。脚本冒烟测得出手写代码的死活，测不出正文少了一整节——
+# 2026-11-12 那次重构把「改风格」「语义冻结」「事实/推测/未知」三块整体删掉，
+# validate 依然全绿零警告。以下每条都是承重的，缺一个就等于对应步骤静默失效。
+CONTENT_SPECS: dict[str, list[tuple[str, str]]] = {
+    "SKILL.md": [
+        ("三段流程命名（判 → 写 → 过闸）", r"判\s*→\s*写\s*→\s*过闸"),
+        ("四条原则", r"四条原则"),
+        ("两条红线", r"两条红线"),
+        ("六阶段名单", r"stranger[\s\S]{0,200}warming[\s\S]{0,200}dating[\s\S]{0,200}"
+                       r"couple_early[\s\S]{0,200}couple_stable[\s\S]{0,200}repairing"),
+        ("事实 / 推测 / 未知三栏", r"事实\s*/\s*推测\s*/\s*未知"),
+        ("七问字段", r"give_substance"),
+        ("危险度阈值", r"danger\s*[>≥]=?\s*7"),
+        ("六种策略", r"minimal[\s\S]*hold"),
+        ("改风格", r"改风格"),
+        ("语义冻结", r"语义冻结"),
+        ("冷启动不阻塞", r"冷启动"),
+        ("输出格式章节", r"^## 输出格式"),
+        ("输出反面例子", r"反面例子"),
+        ("硬约束章节", r"^## 硬约束"),
+        ("危机转介入口", r"危机转介\.md"),
+        ("多份档案先问", r"多份档案"),
+        ("无 bash 走 standalone", r"prompts/standalone\.md"),
+    ],
+    "AGENTS.md": [
+        ("三段流程命名", r"判\s*→\s*写\s*→\s*过闸"),
+        ("派生物声明", r"派生物"),
+        ("四条原则", r"四条原则"),
+        ("两条红线", r"两条红线"),
+        ("六阶段名单", r"stranger[\s\S]{0,200}repairing"),
+        ("危险度阈值", r"danger\s*[>≥]=?\s*7"),
+        ("语义冻结", r"语义冻结"),
+        ("冷启动不阻塞", r"冷启动"),
+        ("输出反面例子", r"反面例子"),
+        ("硬约束章节", r"^## 硬约束"),
+        ("多份档案先问", r"多份时，先问"),
+    ],
+    "prompts/standalone.md": [
+        ("四条原则（与主文件同一套）", r"四条原则"),
+        ("两条红线", r"两条红线"),
+        ("六阶段名单", r"stranger[\s\S]{0,200}repairing"),
+        ("危险度阈值", r"危险度\s*[≥>=]"),
+        ("语义冻结", r"语义冻结"),
+        ("冷启动安全默认", r"冷启动"),
+        ("输出格式", r"【输出格式"),
+        ("输出反面例子", r"反面例子"),
+        ("不许替用户承诺", r"不许替我承诺"),
+    ],
+}
+
+# 三份入口的条目数必须一致。两份互相矛盾的指令，模型不会报错，
+# 只会随便挑一条执行，而且不会告诉用户它挑了哪条。
+PRINCIPLE_COUNT = 4
+HARD_RULE_COUNT = 7
+
+# 反引号里写的相对路径必须真实存在，断链比没写更糟
+LOCAL_REF = re.compile(r"`((?:references|prompts|documentation|scripts)/[^`\s]+?\.(?:md|py))`")
+NUMBERED = re.compile(r"^\s*\d+[.、]?\s")
+
 errors: list[str] = []
 warnings: list[str] = []
 
@@ -82,6 +141,84 @@ def check_budget() -> None:
     if lines > 200:
         warnings.append(f"SKILL.md 有 {lines} 行，建议压到 200 行内")
 
+
+def _section_body(text: str, keyword: str) -> str:
+    """取含 keyword 的标题行之后的正文，到下一个标题为止。"""
+    lines = text.splitlines()
+    start = None
+    for i, ln in enumerate(lines):
+        s = ln.lstrip()
+        if keyword in ln and (s.startswith("#") or s.startswith("【")):
+            start = i + 1
+            break
+    if start is None:
+        return ""
+    body: list[str] = []
+    for ln in lines[start:]:
+        s = ln.lstrip()
+        if s.startswith("#") or s.startswith("【"):
+            break
+        body.append(ln)
+    return "\n".join(body)
+
+
+def count_numbered(text: str, keyword: str) -> int:
+    return sum(1 for ln in _section_body(text, keyword).splitlines() if NUMBERED.match(ln))
+
+
+def check_content() -> None:
+    """正文关键块是否还在。这是给「压缩文档时整节消失」兜底的。"""
+    checked = 0
+    for rel, specs in CONTENT_SPECS.items():
+        p = ROOT / rel
+        if not p.exists():
+            continue
+        text = p.read_text(encoding="utf-8")
+        for label, pattern in specs:
+            checked += 1
+            if not re.search(pattern, text, re.M):
+                errors.append(f"{rel} 缺少「{label}」，对应步骤会静默失效")
+    print(f"  正文关键块 {checked} 项")
+
+
+def check_entries_agree() -> None:
+    """三份入口的条目数必须一致，否则等于两份互相矛盾的规则。"""
+    texts: dict[str, str] = {}
+    for rel in ("SKILL.md", "AGENTS.md", "prompts/standalone.md"):
+        p = ROOT / rel
+        if p.exists():
+            texts[rel] = p.read_text(encoding="utf-8")
+
+    for rel, text in texts.items():
+        n = count_numbered(text, "条原则")
+        if n != PRINCIPLE_COUNT:
+            errors.append(f"{rel} 有 {n} 条原则，约定 {PRINCIPLE_COUNT} 条（对齐 SKILL.md）")
+
+    rules = {rel: count_numbered(t, "硬约束") for rel, t in texts.items() if rel != "prompts/standalone.md"}
+    if len(set(rules.values())) > 1:
+        detail = "、".join(f"{k} {v} 条" for k, v in rules.items())
+        errors.append(f"硬约束条数不一致：{detail}；{HARD_RULE_COUNT} 条为准")
+    elif rules and next(iter(rules.values())) != HARD_RULE_COUNT:
+        errors.append(f"硬约束应为 {HARD_RULE_COUNT} 条，实际 {next(iter(rules.values()))} 条")
+    print(f"  入口一致性：原则 {PRINCIPLE_COUNT} 条 / 硬约束 {HARD_RULE_COUNT} 条")
+
+
+def check_local_refs() -> None:
+    """正文里用反引号写出的相对路径必须存在。"""
+    checked = 0
+    for rel in ("SKILL.md", "AGENTS.md", "prompts/standalone.md", "prompts/profile-interview.md",
+                "prompts/self-interview.md", "references/judge.md", "references/compose.md",
+                "references/style-guide.md", "references/profile.md", "references/self.md",
+                "references/stages.md", "references/routes.md"):
+        p = ROOT / rel
+        if not p.exists():
+            continue
+        for m in LOCAL_REF.finditer(p.read_text(encoding="utf-8")):
+            target = m.group(1)
+            checked += 1
+            if not (ROOT / target).exists():
+                errors.append(f"{rel} 引用了不存在的文件：{target}")
+    print(f"  正文路径引用 {checked} 个")
 
 def check_routes() -> None:
     """routes.md 里引用的每个 kb 路径都必须真实存在。断链比没有路由更糟。"""
@@ -240,6 +377,9 @@ def main() -> int:
     check_required()
     check_frontmatter()
     check_budget()
+    check_content()
+    check_entries_agree()
+    check_local_refs()
     check_routes()
     check_kb()
     check_style_tool()
