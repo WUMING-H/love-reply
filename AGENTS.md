@@ -158,4 +158,5 @@ python <skill>/scripts/profile_tool.py goal add --slot couple_early --kind advan
 ## 详细文档
 
 `documentation/architecture.md` · `flows.md` · `knowledge-base.md` · `style-layer.md` ·
-`stages.md` · `self-and-goals.md` · `safety.md` · `portability.md`。改行为前先读对应那份。
+`stages.md` · `self-and-goals.md` · `safety.md` · `portability.md` · `evaluation.md`。
+改行为前先读对应那份。

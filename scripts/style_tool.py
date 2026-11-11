@@ -164,7 +164,9 @@ def check(text: str, card: dict | None, strategy_name: str = "auto") -> dict:
     # 无卡时用绝对档位（默认值不是这个人的统计，套系数会算出 74 字这种没意义的上限）。
     if card is None:
         hi = NO_CARD_LIMITS.get(strategy_name, 26)
-        lo = 3
+        # 没有风格卡就没有下限依据。拍一个 3 字会误杀「没有」「不去」「好啊」
+        # 这种正常的两字回复——它们是中文聊天里最高频的答法，逼模型改长反而失真。
+        lo = 1
     else:
         if strategy_name in ("minimal", "care", "hold"):
             hi = max(int(p90 * 1.2), 18)

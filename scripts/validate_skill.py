@@ -33,6 +33,8 @@ REQUIRED = [
     "prompts/self-interview.md",
     "scripts/style_tool.py",
     "scripts/profile_tool.py",
+    "scripts/eval_skill.py",
+    "evals/cases.jsonl",
     "licenses/goutoujunshi-LICENSE",
 ]
 

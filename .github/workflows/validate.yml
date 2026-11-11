@@ -37,6 +37,9 @@ jobs:
           fi
           echo "通过（退出码 $code，2 表示只有警告）"
 
+      - name: Evaluation suite
+        run: python scripts/eval_skill.py
+
       - name: Style tool smoke test (accept)
         run: |
           python scripts/style_tool.py check --text "下周六开幕 我订两张" --strategy minimal
