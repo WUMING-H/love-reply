@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import sys
@@ -382,9 +383,29 @@ def check_self_and_gate() -> None:
         out = buf.getvalue()
         if "[我]" not in out or "目标!" not in out:
             errors.append("自我档案冒烟失败：brief 没有带出自我段或硬目标标记")
-        if "任务" not in out:
-            errors.append("自我档案冒烟失败：brief 没有带出阶段任务")
-        print(f"  闸门冒烟：底线拦截、阶段闸门、自我段均正常（brief {len(out.strip())} 字）")
+        if "[阶段 " not in out or "可用 " not in out:
+            errors.append("自我档案冒烟失败：brief 没有带出阶段卡（策略白名单与上限）")
+
+        # verify 一次要能同时看见两道闸门的结果，否则它只是把两次调用换了个名字
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = profile_tool.main([
+                "verify", "--slot", "ci",
+                "--candidate", "minimal:是我没安排好",
+                "--candidate", "advance:下周末一起出去玩吧",
+                "--candidate", "repair:上次是我忘了，明天我自己去拿。",
+            ])
+        v = json.loads(buf.getvalue())
+        rows = v["candidates"]
+        if rows[0]["verdict"] != "pass":
+            errors.append(f"verify 冒烟失败：合规候选被判 {rows[0]['verdict']} {rows[0]['problems']}")
+        if rows[1]["verdict"] != "fail":
+            errors.append("verify 冒烟失败：修复期的 advance 候选未被拦")
+        if not any("表达" in p for r in rows for p in r["problems"]):
+            errors.append("verify 冒烟失败：没有合并表达闸门的结论")
+        if code == 0 and any(r["verdict"] == "fail" for r in rows):
+            errors.append("verify 冒烟失败：有 fail 却返回 0")
+        print(f"  闸门冒烟：底线拦截、阶段闸门、自我段、批量校验均正常（brief {len(out.strip())} 字）")
     except SystemExit as exc:
         errors.append(f"自我档案冒烟失败：命令退出码 {exc.code}")
     except Exception as exc:  # pragma: no cover

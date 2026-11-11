@@ -11,7 +11,8 @@
     goal add / goal list / goal done / goal drop
 
 守门：
-    guard          检查候选是否踩到自己的底线、短板、硬目标，以及有没有落进具体细节
+    guard          检查一条候选是否踩到自己的底线、短板、硬目标，以及有没有落进具体细节
+    verify         三条候选一次过内容闸门与表达闸门，输出判定表
 
 存储位置：%LOVE_REPLY_HOME%，未设置时用本 Skill 目录下的 data/
     data/profile/{slot}.json   对她的档案 + 关系目标
@@ -461,6 +462,27 @@ def brief_line(kind: str, text: str, item: dict) -> str:
     return f"{LABEL.get(kind, kind)} {t}"
 
 
+def stage_block(name: str) -> list[str]:
+    """阶段卡的三行浓缩。
+
+    以前这一步要单独跑一次 `stage`，那是整条流程里最容易被跳过的一次调用：
+    它不给任何跟「她」有关的信息，看起来可以省，而省掉的后果是策略越级。
+    并进 brief 之后，取档案就同时拿到了这一阶段允许什么、禁止什么。
+    """
+    if name not in STAGE:
+        return [f"[阶段] 未知「{name}」，先确认是六档里的哪一个：{'、'.join(STAGE)}"]
+    c = STAGE[name]
+    allow = "/".join(c["allow"])
+    if c.get("conditional"):
+        allow += "，" + "/".join(c["conditional"]) + " 需前置"
+    deny = "/".join(c["deny"]) or "无"
+    return [
+        f"[阶段 {name}] {c['task']}",
+        f"可用 {allow} · 禁 {deny} · ≤{c['max_chars']}字 · 细节{c['detail']}",
+        f"忌 {c['trap']}",
+    ]
+
+
 def cmd_brief(args) -> int:
     """给模型看的注入摘要。必须短——它进的是每次调用的上下文。"""
     data = load(args.slot)
@@ -514,7 +536,8 @@ def cmd_brief(args) -> int:
     me = self_block(sd, data.get("goals", []), BRIEF_SELF_CHARS)
 
     if not picked and not me:
-        print(head + "\n（档案里还没有内容，先录入几条事实和雷区）")
+        print("\n".join([head, *stage_block(person.get("stage", "")),
+                         "（档案里还没有内容，先录入几条事实和雷区）"]))
         return 0
 
     lines: list[str] = []
@@ -527,11 +550,9 @@ def cmd_brief(args) -> int:
     # 1 再放「她」
     lines.append(head)
     used = sum(len(x) + 1 for x in lines)
-    if person.get("stage") in STAGE:
-        task = f"任务 {STAGE[person['stage']]['task']}"
-        if used + len(task) + 1 <= BRIEF_TOTAL_CHARS:
-            lines.append(task)
-            used += len(task) + 1
+    # 阶段卡不计入个人额度：它是固定大小的规则，不是「她」的记忆。
+    # 挤掉一条事实去换一条规则没有意义——规则缺了会直接用错策略。
+    lines.extend(stage_block(person.get("stage", "")))
     for kind, item, text in picked:
         line = brief_line(kind, text, item)
         if used + len(line) + 1 > BRIEF_TOTAL_CHARS:
@@ -989,6 +1010,80 @@ def cmd_guard(args) -> int:
     return 0 if result["ok"] else 2
 
 
+STRATEGIES = ("minimal", "care", "substantive", "advance", "repair", "hold")
+
+
+def _parse_candidate(spec: str) -> dict:
+    head, sep, tail = spec.partition(":")
+    if sep and head.strip() in STRATEGIES + ("auto",):
+        return {"strategy": head.strip(), "text": tail.strip()}
+    return {"strategy": "auto", "text": spec.strip()}
+
+
+def cmd_verify(args) -> int:
+    """三条候选一次过两道闸门。
+
+    以前是每条候选各跑一次 guard、一次 check，加一次 stage，一次 brief，
+    总共八趟子进程。对模型来说每多一步就多一次静默跳过的机会，而跳过不会
+    报错——它只会少做一次校验，你从结果上看不出来。压成一次调用之后，
+    「三条都过闸」成了必须看到的一张表，而不是希望它记得做的事。
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from style_tool import check as style_check, load_card
+
+    if args.file:
+        raw = json.loads(Path(args.file).read_text(encoding="utf-8"))
+        specs = raw if isinstance(raw, list) else raw.get("candidates", [])
+        cands = [s if isinstance(s, dict) else _parse_candidate(str(s)) for s in specs]
+    else:
+        cands = [_parse_candidate(s) for s in (args.candidate or [])]
+
+    if not cands:
+        print(json.dumps({"ok": False, "error": "没有候选。用 --candidate 策略:文字，或 --file"}, ensure_ascii=False))
+        return 1
+
+    self_data = load_self()
+    slot_data = load(args.slot) if profile_path(args.slot).exists() else None
+    stage = args.stage or (slot_data or {}).get("person", {}).get("stage", "")
+    card = load_card(args.slot)
+
+    rows = []
+    for i, c in enumerate(cands, 1):
+        text = (c.get("text") or "").strip()
+        strat = c.get("strategy") or "auto"
+        g = guard(text, self_data, slot_data, strat, stage)
+        s = style_check(text, card, strat)
+        problems = g["problems"] + [f"[表达] {p}" for p in s["problems"]]
+        rows.append({
+            "n": i, "strategy": strat, "text": text, "length": len(text),
+            "verdict": "pass" if not problems else "fail",
+            "problems": problems,
+            "notes": g["notes"],
+            "anchors": g["anchors"],
+            "target_range": s["target_range"],
+        })
+
+    passed = [r for r in rows if r["verdict"] == "pass"]
+    out = {
+        "stage": stage or None,
+        "has_style_card": card is not None,
+        "candidates": rows,
+        "summary": {
+            "pass": len(passed), "fail": len(rows) - len(passed),
+            "next": ("可以直接输出" if len(passed) == len(rows) else
+                     "没过的按 problems 改，别换策略重写" if passed else
+                     "一条都没过：先看策略是不是被这一阶段禁了，别硬改文字"),
+        },
+    }
+    if stage:
+        out["stage_task"] = stage_card(stage)["task"]
+        out["stage_trap"] = stage_card(stage)["trap"]
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    # 只有三条全过才算收工。返回 0 会是「可以输出」的信号，
+    # 而三条里挂一条也意味着这组候选还不齐，不能拿它当通过。
+    return 0 if len(passed) == len(rows) else 2
+
+
 # ---------------------------------------------------------------- CLI
 
 def main(argv: list[str] | None = None) -> int:
@@ -1134,6 +1229,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--strategy", default="")
     p.add_argument("--stage", default="", choices=[""] + list(STAGE))
     p.set_defaults(func=cmd_guard)
+
+    p = sub.add_parser("verify", help="三条候选一次过两道闸门")
+    slot_arg(p)
+    p.add_argument("--candidate", action="append", default=[],
+                   help="策略:文字，可重复。策略可省")
+    p.add_argument("--file", default="", help='JSON 文件：[{"strategy":"minimal","text":"..."}]')
+    p.add_argument("--stage", default="", choices=[""] + list(STAGE))
+    p.set_defaults(func=cmd_verify)
 
     args = ap.parse_args(argv)
     return args.func(args)

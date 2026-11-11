@@ -271,9 +271,19 @@ python scripts/profile_tool.py add --slot couple_early --kind read \
   --text "她不喜欢被安排，替她做决定会被当成不尊重" \
   --confidence high --evidence "两次提议都被她说我自己来" --tag 边界
 
-# 每次回复前取一段摘要（380 字内，直接进上下文）
+# 每次回复前取一次（阶段卡 + 她 + 我，一次拿全，直接进上下文）
 python scripts/profile_tool.py brief --slot couple_early --query "她说今天好累"
+
+# 三条候选一次过内容与表达两道闸门
+python scripts/profile_tool.py verify --slot couple_early \
+  --candidate 'minimal:那先歇会儿' \
+  --candidate 'substantive:下班给你带那家潮汕牛肉锅 你几点走' \
+  --candidate 'care:听着就累 早点躺下'
 ```
+
+`brief` 的前三行是阶段卡（允许 / 禁止 / 字数上限 / 细节密度 / 这一阶段的坑），后面才是她。
+`verify` 每条给 `verdict` 和 `problems`：`pass` 就能发，`fail` 按 `problems` 改那一条。
+两步之外没有别的必跑命令——一次回复只走两趟脚本，中间没有可跳过的环节。
 
 **认知与事实必须分开，这是整套设计的核心。** 把推断写成事实之后就再也不会被质疑了——档案里写着「她不喜欢被安排」，半年后你还在按这句话行动，而它可能来自一次误会。
 
@@ -323,7 +333,7 @@ python scripts/profile_tool.py forget --slot couple_early --ids r3   # 过时了
 阶段怎么判：看四条硬证据——她主动发起过话题吗、单独见过面吗、关系说清了吗、有没有未解的冲突。**有未解冲突一律按修复期处理**，其他阶段的行为全部失效。判不准就问一句「你们现在算什么状态」，比猜错强。
 
 ```bash
-# 取阶段卡：允许哪些策略、禁止哪些、细节给多少、字数上限
+# 阶段卡平时由 brief 顺带带出；只想单独看一眼时用这条
 python scripts/profile_tool.py stage --name repairing
 ```
 
@@ -436,7 +446,7 @@ love-reply/
 │   └── self-interview.md        # 十二问：给自己的档案与目标
 ├── scripts/
 │   ├── style_tool.py            # profile / check / feedback / show
-│   ├── profile_tool.py          # 她 / 我 / 目标 / 阶段卡 / 守门
+│   ├── profile_tool.py          # 她 / 我 / 目标 / 阶段卡 / 守门 / 批量校验
 │   ├── eval_skill.py            # 评测集：固定场景跑两道闸门
 │   └── validate_skill.py        # 完整性自检（文件、正文关键块、入口一致性）
 ├── evals/

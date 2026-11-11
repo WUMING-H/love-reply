@@ -44,16 +44,14 @@
 4. **七问**（`references/judge.md`）：`literal` · `intent`(6) · `danger`(0–9) · `give_substance` ·
    `best_action`(7) · `need`(5) · `resolved`。
    **`danger ≥ 7` 之后只允许「稳住 / 补救 / 留白」，禁止玩笑与邀约。**
+5. **取档**：`brief --slot X --query "<这段对话在说什么>"`，一次拿到阶段卡和她的信息。
 
 ### 写
 
-拿阶段卡，它决定这轮能用哪些策略：
-
-```bash
-python <skill>/scripts/profile_tool.py stage --slot couple_early
-```
-
-返回允许 / 有条件 / 禁止三档，加细节密度和字数上限。**「禁止」里的策略一条都不能出现**，不是少用。
+`brief` 的前三行就是阶段卡——可用 / 禁 / 字数上限 / 细节密度 / 这一阶段的坑。
+**「禁」里的策略一条都不能出现**，不是少用。`[我]` 段里 `目标!` 是硬目标，候选不能违背；
+`认知?[低]` 只能拿去生成试探型候选，**不得作为判断依据**；档案不改变 `danger` 的打分。
+档案没有也能往下走，别为了补档案停下来问。
 
 再锁目标：`让对方感到 X，同时我要 Y，不要 Z`。Y 必须来自他的个人目标，不是「让对话变好」。
 
@@ -79,21 +77,19 @@ python <skill>/scripts/profile_tool.py stage --slot couple_early
 ### 过闸
 
 ```bash
-python <skill>/scripts/profile_tool.py guard --text "<候选>" --slot couple_early --strategy substantive
-python <skill>/scripts/style_tool.py check --text "<候选>" --slot couple_early --strategy minimal
+python <skill>/scripts/profile_tool.py verify --slot couple_early \
+  --candidate 'minimal:...' --candidate 'substantive:...' --candidate 'care:...'
 ```
 
-第一道查底线、硬目标、阶段、细节；第二道查长度、语气、AI 味。哪道不过就改哪道，
+一次把三条过两道闸门（内容 + 表达），每条给 `verdict` 和 `problems`。有 `fail` 就按 `problems`
+改那一条，别换策略重写；全 `fail` 说明这组策略被阶段禁了，回头改组合。`notes` 里
+「没接住任何具体事实」在 `substantive` / `advance` / `repair` 三档当问题处理。
+
 连败两次用未改写版本（宁可不像，不要为像而失真）。不通过就重写，不要向用户解释过程。
 
-### 辅助（可跳过）
+### 辅助：写回
 
-**读档** —— `brief --slot X --query "<这段对话在说什么>"`，输出 `[我]` 与 `[她·阶段]` 两段。
-
-`目标!` 带感叹号的是硬目标，候选不能违背；`任务` 是阶段任务，比任何技巧优先；`认知?[低]` 只能拿去
-生成试探型候选，**不得作为判断依据**；档案不改变 `danger` 的打分。
-
-**写回** —— 出现新事实、新承诺、明确雷区、**他自己的短板或方向**时问一句，一次对话最多问一次，
+出现新事实、新承诺、明确雷区、**他自己的短板或方向**时问一句，一次对话最多问一次，
 说不用就不再提。
 
 ```bash

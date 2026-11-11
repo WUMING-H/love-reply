@@ -18,11 +18,12 @@
 ## ⓪ 阶段与目标先于一切
 
 ```bash
-python scripts/profile_tool.py stage --slot couple_early     # 取阶段卡
-python scripts/profile_tool.py goal list --slot couple_early # 取目标
+python scripts/profile_tool.py brief --slot couple_early --query "..."  # 阶段卡 + 她 + 我，一次拿全
+python scripts/profile_tool.py goal list --slot couple_early            # 只看目标时用这条
 ```
 
-阶段卡给四件事：允许的策略、禁止的策略、细节密度、字数上限。
+`brief` 的前三行就是阶段卡：允许的策略、禁止的策略、细节密度、字数上限。
+（只想要阶段卡也可以单独跑 `stage`，但主流程里不必多跑一趟。）
 
 **阶段管手段，目标管方向。** 顺序不能换：
 
@@ -197,11 +198,11 @@ python scripts/profile_tool.py goal list --slot couple_early # 取目标
 
 **最反直觉的是最后一格。** 修复期你说「我六点就出发了，路上堵了四十分钟，我真的不是故意」，她听到的是「他在证明自己没错」。这个阶段只需要一句「是我没安排好」，细节留到她问。
 
-**验收方式**：跑 `guard`，看 `anchors` 字段。
+**验收方式**：跑 `verify`，看每条候选的 `anchors` 字段。
 
 ```bash
-python scripts/profile_tool.py guard --text "下班给你带那家潮汕牛肉锅 你几点走" \
-  --slot couple_early --strategy substantive
+python scripts/profile_tool.py verify --slot couple_early \
+  --candidate 'substantive:下班给你带那家潮汕牛肉锅 你几点走'
 ```
 
 `anchors` 非空，说明真的接住了档案里的具体事实。`substantive` / `advance` / `repair` 三档若 anchors 为空，会提示"没接住任何具体事实"。

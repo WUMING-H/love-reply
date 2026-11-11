@@ -77,9 +77,10 @@ python scripts/profile_tool.py export --slot couple_early --out 档案.md
 
 | 脚本 | 手工替代 |
 |---|---|
-| `profile_tool.py brief` | 读 `data/self.json` 与 `data/profile/{slot}.json`，按 `references/profile.md` 第 4 节的优先级自己挑：硬目标 → 底线 → 阶段任务 → 相关条目 4–6 条 |
+| `profile_tool.py brief` | 读 `data/self.json` 与 `data/profile/{slot}.json`，按 `references/profile.md` 第 4 节的优先级自己挑：硬目标 → 底线 → 阶段卡 → 相关条目 4–6 条 |
 | `profile_tool.py stage` | 查 `references/stages.md` 的六阶段表，取该阶段允许/禁止的策略、细节密度、字数上限 |
-| `profile_tool.py guard` | 目测三件：候选里有没有他自己写的底线词、策略是否在该阶段被禁、有没有接住档案里的具体事实 |
+| `profile_tool.py verify` | 对三条候选逐条走一遍下面两行：内容（底线词 / 阶段禁用 / 有没有接住具体事实）+ 表达（字数 / 句号 / emoji / AI 味） |
+| `profile_tool.py guard` | 只查内容那一道：候选里有没有他自己写的底线词、策略是否在该阶段被禁、有没有接住档案里的具体事实 |
 | `style_tool.py show` | 读 `data/style/{slot}.json` 的 `metrics` 和 `strategy.avoid` |
 | `style_tool.py check` | 按 `references/style-guide.md` 的硬规则目测：字数是否超上限、有没有句号、有没有 emoji、有没有 AI 味短语 |
 

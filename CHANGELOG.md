@@ -2,6 +2,26 @@
 
 格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.7.0] — 2026-11-12
+
+**一次回复从八趟脚本压到两趟。**
+
+原来是 `brief` → `stage` → 三条候选各跑 `guard` 和 `check`：八次子进程。慢倒是其次，真正的问题是**每一步都是一次可以静默跳过的机会**。模型跳过中间某步不会报错，它只会少做一次校验，而输出看起来完全正常——长流程 Skill 最主要的失效方式就是这个，且用户永远发现不了。
+
+两处合并：
+
+```bash
+python scripts/profile_tool.py brief  --slot X --query "..."   # 阶段卡 + 她 + 我
+python scripts/profile_tool.py verify --slot X \
+  --candidate 'minimal:...' --candidate 'substantive:...' --candidate 'care:...'
+```
+
+`brief` 的前三行现在是阶段卡：允许 / 禁止 / 字数上限 / 细节密度 / 这一阶段的坑。它不占个人额度——规则是固定大小的，而挤掉一条事实去换一条规则没有意义：规则缺了会直接用错策略，事实缺了只是不够具体。所以单独的 `stage` 不再出现在主流程里（命令保留，想单独查还能用）。
+
+`verify` 一次吃三条候选，内容闸门与表达闸门同时跑，每条给 `verdict` 和 `problems`。**只有三条全过才返回 0**：返回 0 是「可以输出」的信号，而挂一条也意味着这组候选还不齐。
+
+`validate_skill.py` 增加批量校验冒烟：合规候选过、修复期 `advance` 被拦、表达闸门结论确实并进来了、有 fail 时退出码不是 0。四项任一失效都会报错。
+
 ## [0.6.0] — 2026-11-12
 
 **不用先攒语料：从这次贴进来的对话取样。**

@@ -51,15 +51,20 @@ resolved       张力是否已解除
 
 **`danger >= 7` 只允许「稳住 / 补救 / 留白」，禁止玩笑和邀约。**
 
-### 写
-
-**先取阶段卡**，它决定这轮能用哪些策略：
+**五、取档。** 阶段判完立刻跑一次，阶段卡和她的信息一起出来：
 
 ```bash
-python <skill>/scripts/profile_tool.py stage --slot couple_early
+python <skill>/scripts/profile_tool.py brief --slot couple_early --query "<这段对话在说什么>"
 ```
 
-返回允许、有条件、禁止三档，加细节密度和字数上限。**「禁止」里的策略一个都不能用**——不是少用，是不能出现。
+- `[阶段 X]` 三行——可用策略 / 禁用策略 / 字数上限 / 细节密度 / 这一阶段的坑。**「禁」里的一个都不能用，不是少用。**
+- `[我]` 段定方向，`目标!` 带感叹号的是硬目标，候选不能违背
+- `[她]` 段里 `认知?[低]` **不得作为判断依据**，只能拿去生成一条试探型候选
+- 档案不改变 `danger` 的打分，只影响具体程度和方向
+
+档案没有也能往下走，别为了补档案停下来问。规则见 `references/profile.md`（她）、`references/self.md`（我与目标）。
+
+### 写
 
 再锁一句：`让对方感到 X，同时我要 Y，不要 Z`。这个 Y 必须来自他的个人目标，不是「让对话变好」。
 
@@ -96,36 +101,20 @@ python <skill>/scripts/style_tool.py sample --file <他的发言.txt> --slot cou
 
 ### 过闸
 
-两道都过才输出。不通过就重写，不要向用户解释过程。
-
-**闸一 · 内容**（底线、硬目标、阶段、细节）：
+三条一次过，两道闸门同时跑：
 
 ```bash
-python <skill>/scripts/profile_tool.py guard --text "..." --slot couple_early --strategy substantive
+python <skill>/scripts/profile_tool.py verify --slot couple_early \
+  --candidate 'minimal:...' --candidate 'substantive:...' --candidate 'care:...'
 ```
 
-`problems` 里有一条就回去改。`notes` 说「没接住任何具体事实」时，在 `substantive` / `advance` / `repair` 三档当问题处理——说明还停在通用层。
+每条带 `verdict` 和 `problems`。有 `fail` 就按 `problems` 改那一条，**别换策略重写**；全 `fail` 说明这组策略被阶段禁了，回头改组合。`notes` 里「没接住任何具体事实」在 `substantive` / `advance` / `repair` 三档当问题处理——说明还停在通用层。
 
-**闸二 · 表达**（长度、语气、AI 味）：
+连改两次不过，就用未改写的版本：**宁可不像，不要为像而失真。** 不通过就重写，不要向用户解释过程。
 
-```bash
-python <skill>/scripts/style_tool.py check --text "..." --slot couple_early --strategy minimal
-```
+### 辅助：写回
 
-`--strategy` 填这条的策略，长度上限按策略分档。连改两次不过，就用未改写的版本：**宁可不像，不要为像而失真。**
-
-### 辅助（可跳过）
-
-**读档** —— `profile_tool.py brief --slot X --query "<这段对话在说什么>"`：
-
-- `[我]` 段定方向，`目标!` 带感叹号的是硬目标，候选不能违背
-- `任务` 是阶段任务，比任何单条技巧都优先
-- `认知?[低]` **不得作为判断依据**，只能拿去生成一条试探型候选
-- 档案不改变 `danger` 的打分，只影响候选的具体程度和方向
-
-规则见 `references/profile.md`（她）、`references/self.md`（我与目标）。
-
-**写回** —— 只在出现下面四类内容时问一句，**一次对话最多问一次**。用户说「记」就 `add`，说「不用」就当没发生，不要追问理由。
+只在出现下面四类内容时问一句，**一次对话最多问一次**。用户说「记」就 `add`，说「不用」就当没发生，不要追问理由。
 
 | 出现了什么 | 记成 |
 |---|---|
