@@ -216,6 +216,9 @@ Windows 上直接放进 skills 目录即可；如果本体想放在别的盘，�
 # 一行一条，只放你自己发出的消息，50–100 条起步
 python scripts/style_tool.py profile --file 我的消息.txt --slot couple_early
 
+# 不攒语料也行：从这次贴进来的对话里抽你自己发的那几句
+python scripts/style_tool.py sample --file 他的发言.txt --slot couple_early
+
 # 校验一条候选是否符合你的风格（按策略分档卡长度）
 python scripts/style_tool.py check --text "下周六开幕" --strategy minimal
 
@@ -223,6 +226,12 @@ python scripts/style_tool.py check --text "下周六开幕" --strategy minimal
 python scripts/style_tool.py feedback --slot couple_early --kind edited \
   --ai "周六下午我去接你" --user "周六 我过去"
 ```
+
+**最常见的用法是先 `sample`，不是先 `profile`。** 你贴进来的那段对话里本来就有你自己发的话，截图里右侧气泡就是你——不用先攒一百条，把那几条抽出来跑一趟，就有一份可用这次参考。
+
+但样本少于十二条时，它只给你**禁用表**，不给你字数上限。一段对话里的你可能只是「她生气了所以我变短」，六条消息算出的中位数是这次的状态，不是你平时的长度。脚本会把这种卡标成 `small_sample`，校验时自动改用绝对档位，禁用项照旧生效。
+
+临场样本默认不落盘，只在这一条回复里生效——一段对话的权重不该盖过几十上百条的基线。要存进风格卡得显式 `--save`，而且已有的语料卡不会被它覆盖（除非 `--force`）。截图里的头像、昵称、手机号不进档案。
 
 `profile` 会算出长度分布、句号率、emoji 密度、短句比例、语气助词密度，并从「你从不做什么」反推禁用表：语料里从不出现 emoji，就写「不用 emoji」；从不加句号，就写「不加句号」。
 

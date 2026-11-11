@@ -56,6 +56,7 @@ CONTENT_SPECS: dict[str, list[tuple[str, str]]] = {
         ("七问字段", r"give_substance"),
         ("危险度阈值", r"danger\s*[>≥]=?\s*7"),
         ("六种策略", r"minimal[\s\S]*hold"),
+        ("临场取样", r"style_tool\.py sample"),
         ("改风格", r"改风格"),
         ("语义冻结", r"语义冻结"),
         ("冷启动不阻塞", r"冷启动"),
@@ -63,7 +64,7 @@ CONTENT_SPECS: dict[str, list[tuple[str, str]]] = {
         ("输出反面例子", r"反面例子"),
         ("硬约束章节", r"^## 硬约束"),
         ("危机转介入口", r"危机转介\.md"),
-        ("多份档案先问", r"多份档案"),
+        ("多份档案先问", r"多份时，先问"),
         ("无 bash 走 standalone", r"prompts/standalone\.md"),
     ],
     "AGENTS.md": [
@@ -73,6 +74,7 @@ CONTENT_SPECS: dict[str, list[tuple[str, str]]] = {
         ("两条红线", r"两条红线"),
         ("六阶段名单", r"stranger[\s\S]{0,200}repairing"),
         ("危险度阈值", r"danger\s*[>≥]=?\s*7"),
+        ("临场取样", r"sample --file"),
         ("语义冻结", r"语义冻结"),
         ("冷启动不阻塞", r"冷启动"),
         ("输出反面例子", r"反面例子"),
@@ -84,6 +86,7 @@ CONTENT_SPECS: dict[str, list[tuple[str, str]]] = {
         ("两条红线", r"两条红线"),
         ("六阶段名单", r"stranger[\s\S]{0,200}repairing"),
         ("危险度阈值", r"危险度\s*[≥>=]"),
+        ("临场取样", r"取样"),
         ("语义冻结", r"语义冻结"),
         ("冷启动安全默认", r"冷启动"),
         ("输出格式", r"【输出格式"),
@@ -221,6 +224,35 @@ def check_local_refs() -> None:
             if not (ROOT / target).exists():
                 errors.append(f"{rel} 引用了不存在的文件：{target}")
     print(f"  正文路径引用 {checked} 个")
+
+def check_sample_style() -> None:
+    """临场取样冒烟：小样本只用禁用项，不接管长度；禁用项要真的拦得住。"""
+    sys.path.insert(0, str(ROOT / "scripts"))
+    try:
+        import style_tool  # noqa: WPS433
+    except Exception as exc:  # pragma: no cover
+        errors.append(f"style_tool.py 无法导入：{exc}")
+        return
+
+    msgs = ["行", "咋了", "先这样 睡了啊", "出来吃个饭？我请", "别提了 今天累成狗"]
+    card = {"small_sample": True, "metrics": style_tool.compute(msgs),
+            "strategy": {"avoid": style_tool.infer_avoid(msgs)}}
+
+    ok = style_tool.check("下周六开幕 我订两张", card, "minimal")
+    if not ok["ok"]:
+        errors.append(f"临场取样冒烟失败：正常短句被小样本卡误拦 {ok['problems']}")
+
+    # 小样本的 p50 是这次对话的状态，不该变成 20 字句的上限依据
+    long = style_tool.check("下周六我没问题 你定个时间 我都可以的", card, "minimal")
+    if long["ok"]:
+        errors.append("临场取样冒烟失败：小样本卡接管了长度上限")
+
+    haha = style_tool.check("哈哈哈 行", card, "minimal")
+    if haha["ok"]:
+        errors.append("临场取样冒烟失败：avoid 里的「不用哈哈」没有生效")
+
+    print("  临场取样冒烟：小样本只出禁用项，长度走绝对档，禁用项可拦")
+
 
 def check_routes() -> None:
     """routes.md 里引用的每个 kb 路径都必须真实存在。断链比没有路由更糟。"""
@@ -382,6 +414,7 @@ def main() -> int:
     check_content()
     check_entries_agree()
     check_local_refs()
+    check_sample_style()
     check_routes()
     check_kb()
     check_style_tool()

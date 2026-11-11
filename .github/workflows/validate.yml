@@ -10,6 +10,9 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    # 公开仓库的 PR 会跑别人 fork 里的脚本，令牌只需要读
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -36,6 +39,11 @@ jobs:
             exit 1
           fi
           echo "通过（退出码 $code，2 表示只有警告）"
+
+      - name: Sample from a pasted conversation
+        run: |
+          printf '%s\n' "行" "咋了" "先这样 睡了啊" "出来吃个饭？我请" > /tmp/me.txt
+          python scripts/style_tool.py sample --file /tmp/me.txt --slot ci
 
       - name: Evaluation suite
         run: python scripts/eval_skill.py

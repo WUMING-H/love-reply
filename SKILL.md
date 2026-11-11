@@ -80,9 +80,19 @@ python <skill>/scripts/profile_tool.py stage --slot couple_early
 
 知识（`references/routes.md`，按 `intent × stage` 读 2–3 篇）只影响策略，**一个术语都不许出现在候选里**。验收方法：把知识全删掉，候选应该一个字不变。
 
-**改风格**（`references/style-guide.md`）—— 读风格卡，把三条改写成「他会打出来的字」。**语义冻结**：时间、地点、承诺、认的错一个不能丢，把「下周六下午两点」压成「周六见」算失败。
+**先取这次的样。** 他贴进来的这段对话里，他自己发的那几条就是最现成的样本——不用先攒语料，也不用先建卡。截图（多模态宿主直接看，右侧气泡是他）或文字都行，把他的话一行一条抽出来：
 
-没有风格卡时走冷启动的安全默认（短、不加句号、无 emoji），**不在当次阻塞**，先在结尾轻问一句校准，别为了建档停下不给结果。
+```bash
+python <skill>/scripts/style_tool.py sample --file <他的发言.txt> --slot couple_early
+```
+
+`inferred_avoid` 拿到就用：不用 emoji、不加句号、不用「呢啦呀」。**样本不足 12 条时只信这份禁用表，别信字数中位数**——她一生气他就全短，量出来的是这次对话的状态，不是他平时的样子。所以小样本卡不接管长度上限，只用它的禁止项。
+
+临场样本只在这次生效，不落盘；要存进风格卡得他点头（`--save`）。截图里的头像、昵称、手机号、群名一个都不许写进档案。
+
+**改风格**（`references/style-guide.md`）—— 把三条改写成「他会打出来的字」。有长期卡就按卡，没有就按这次的样。**语义冻结**：时间、地点、承诺、认的错一个不能丢，把「下周六下午两点」压成「周六见」算失败。
+
+连样本都没有时（他只贴了一句「她说这个怎么回」），走冷启动的安全默认（短、不加句号、无 emoji），**不在当次阻塞**，结尾轻问一句校准，别为了建档停下不给结果。
 
 ### 过闸
 
@@ -173,20 +183,10 @@ python <skill>/scripts/style_tool.py check --text "..." --slot couple_early --st
 
 **脚本报错或环境不对**：按 `references/stages.md` 的六阶段表人工核对，照样能出结果。**不要假装跑过。**
 
-## 多份档案
-
-`data/profile/` 下有多份时，先问「这次是哪一个」，不要自己挑一个默默往下走。
-
 ## 数据
 
-```
-<skill>/data/
-├── style/{slot}.json      风格卡
-├── profile/{slot}.json    对她的档案 + 关系目标
-├── self.json              自我档案（全局一份）
-└── feedback.jsonl         偏好记录
-```
+`<skill>/data/` 下：`style/{slot}.json` 风格卡 · `profile/{slot}.json` 对她的档案与目标 · `self.json` 自我档案 · `feedback.jsonl` 偏好记录。可用 `LOVE_REPLY_HOME` 改到别处。**数据和 skill 文件分开**，升级不会碰到你的档案；经目录联接挂载时写真实路径那一份。
 
-默认写在 `<skill>/data/`，可用 `LOVE_REPLY_HOME` 改到别处。**数据和 skill 文件分开**，升级 skill 时不会碰到你的档案。skill 目录经目录联接挂载时，写真实路径那一份。
+`data/profile/` 有多份时，先问「这次是哪一个」，不要自己挑一个默默往下走。
 
 细则在 `references/`（`judge` 判据 / `compose` 写法 / `style-guide` 风格 / `profile` 她 / `self` 我与目标 / `stages` 阶段 / `routes` 知识路由），设计背景在 `documentation/`。

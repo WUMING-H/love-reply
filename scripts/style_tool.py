@@ -34,6 +34,15 @@ AI_SMELL = [
     "随时告诉我", "希望能帮到", "深呼吸", "我明白你的意思",
 ]
 
+# avoid 列表里的条目是「指令」，不是「词」，直接拿去做子串匹配永远不会命中。
+# emoji、句号、语气词那三条由 metrics 兜着，剩下三条以前是装饰品——
+# 打印出来给人看，实际从不生效。这里把它们变成真的规则。
+AVOID_PATTERNS = {
+    "不用叠字": r"(.)\1\1",
+    "不用波浪号": r"[～~]",
+    "不用「哈哈」": r"[笑哈]{2,}",
+}
+
 # 无风格卡时的安全默认：短、口语、不夸张
 SAFE_DEFAULT = {
     "chars_p50": 12,
@@ -50,6 +59,10 @@ NO_CARD_LIMITS = {
     "minimal": 16, "care": 16, "hold": 16,
     "substantive": 40, "repair": 34, "advance": 26, "auto": 26,
 }
+
+# 12 条以下的中位数不可信：6 条消息里她一生气，他就全短，算出来的 p50 是这次的状态
+# 不是他平时的样子。所以小样本只取「从不做什么」——那是否定式约束，不依赖分布。
+SMALL_SAMPLE_N = 12
 
 
 def home() -> Path:
@@ -161,11 +174,12 @@ def check(text: str, card: dict | None, strategy_name: str = "auto") -> dict:
 
     # 上限必须按策略分档：minimal 该短，substantive 天生更长。
     # 用同一把尺子会把「给具体时间方案」这类必要长句全拦掉。
-    # 无卡时用绝对档位（默认值不是这个人的统计，套系数会算出 74 字这种没意义的上限）。
-    if card is None:
+    # 无卡时用小样本卡时都用绝对档位：小样本的中位数不可信，量出来的是那次对话的
+    # 状态（她一生气他就全短），不是他平时的长度。禁用项仍然生效，那是它唯一可靠的部分。
+    if card is None or card.get("small_sample"):
         hi = NO_CARD_LIMITS.get(strategy_name, 26)
-        # 没有风格卡就没有下限依据。拍一个 3 字会误杀「没有」「不去」「好啊」
-        # 这种正常的两字回复——它们是中文聊天里最高频的答法，逼模型改长反而失真。
+        # 没有可用的下限依据。拍一个 3 字会误杀「没有」「不去」「好啊」这种两字回复，
+        # 它们是中文聊天里最高频的答法，逼模型改长反而失真。
         lo = 1
     else:
         if strategy_name in ("minimal", "care", "hold"):
@@ -191,6 +205,8 @@ def check(text: str, card: dict | None, strategy_name: str = "auto") -> dict:
 
     for w in banned:
         if w in text:
+            problems.append(f"命中禁用：{w}")
+        elif w in AVOID_PATTERNS and re.search(AVOID_PATTERNS[w], text):
             problems.append(f"命中禁用：{w}")
 
     if (m.get("high_risk_particle_per_100", 0) or 0) < 0.5:
@@ -234,6 +250,9 @@ def cmd_profile(args) -> int:
         "slot": args.slot,
         "version": old.get("version", 0) + 1,
         "updated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "source": "corpus",
+        "n_messages": len(messages),
+        "small_sample": len(messages) < SMALL_SAMPLE_N,
         "metrics": compute(messages),
         "strategy": old.get("strategy") or {
             "length": "短，能五个字说完不写八个字",
@@ -258,6 +277,76 @@ def cmd_profile(args) -> int:
         "inferred_avoid": card["strategy"]["avoid"],
         "note": "strategy 里的 anger/comfort/apology 需要人工或对话校准，脚本不猜",
     }, ensure_ascii=False, indent=2))
+    return 0
+
+
+def read_messages(args) -> list[str]:
+    if args.text:
+        return [args.text]
+    p = Path(args.file)
+    if not p.exists():
+        raise FileNotFoundError(str(p))
+    return [l.strip() for l in p.read_text(encoding="utf-8").splitlines()
+            if l.strip() and not l.strip().startswith("#")]
+
+
+def cmd_sample(args) -> int:
+    """临场取样：从这次对话里他自己发的那几条，算一份「只用这一次」的风格参考。
+
+    不落盘是默认——一段对话里的他，可能只是「她生气了所以他变短」，
+    那不是他平时的样子。要存下来得显式 --save，且不覆盖已有的语料卡。
+    """
+    try:
+        messages = read_messages(args)
+    except FileNotFoundError as exc:
+        print(json.dumps({"ok": False, "error": f"文件不存在：{exc}"}, ensure_ascii=False))
+        return 1
+    if not messages:
+        print(json.dumps({"ok": False, "error": "没有有效消息"}, ensure_ascii=False))
+        return 1
+
+    n = len(messages)
+    metrics = compute(messages)
+    avoid = infer_avoid(messages)
+    small = n < SMALL_SAMPLE_N
+    confidence = "低" if n < SMALL_SAMPLE_N else ("中" if n < 40 else "高")
+
+    result = {
+        "ok": True,
+        "n_messages": n,
+        "confidence": confidence,
+        "small_sample": small,
+        "metrics": metrics,
+        "inferred_avoid": avoid,
+        "note": (
+            f"样本 {n} 条，低于 {SMALL_SAMPLE_N} 条：只用 avoid 列表，不拿它定字数上限。"
+            "禁止项是否定式约束，不依赖分布；中位数会量出这次对话的状态"
+            if small else
+            f"样本 {n} 条，长度分布可用。仍建议用真实长期语料跑 profile 覆盖"
+        ),
+        "card_saved": None,
+    }
+
+    if args.save:
+        old = load_card(args.slot) or {}
+        if old.get("source") == "corpus" and not args.force:
+            result["card_saved"] = None
+            result["note"] += "；已有语料卡，未覆盖（确需覆盖加 --force）"
+        else:
+            card = {
+                "slot": args.slot,
+                "version": old.get("version", 0) + 1,
+                "updated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+                "source": "sample",
+                "n_messages": n,
+                "small_sample": small,
+                "metrics": metrics,
+                "strategy": {"avoid": avoid},
+                "samples": old.get("samples") or {},
+            }
+            result["card_saved"] = str(save_card(args.slot, card))
+
+    print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
 
 
@@ -338,6 +427,14 @@ def main() -> int:
     f.add_argument("--user", default="")
     f.add_argument("--scene", default="")
     f.set_defaults(func=cmd_feedback)
+
+    s = sub.add_parser("sample", help="临场取样：只用这次对话里的几条")
+    s.add_argument("--file", help="每行一条他自己发的消息")
+    s.add_argument("--text", help="单条")
+    s.add_argument("--slot", default="couple_early")
+    s.add_argument("--save", action="store_true", help="落盘成临时卡（默认只在这次生效）")
+    s.add_argument("--force", action="store_true", help="允许覆盖已有的语料卡")
+    s.set_defaults(func=cmd_sample)
 
     s = sub.add_parser("show", help="查看风格卡")
     s.add_argument("--slot", default="couple_early")
