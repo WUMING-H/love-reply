@@ -41,8 +41,8 @@
                 └───────────────┬──────────────────────────┘
                                 ↓ { literal, intent, danger, give_substance, best_action, need, resolved }
                 ┌──────────────────────────────────────────┐
-                │ 3 检索     retrieve （读 routes.md）      │
-                │   intent × stage → 2–3 篇                 │
+                │ 3 检索     retrieve （kb 命令）           │
+                │   intent × stage → 2–3 篇，路径直接可读    │
                 └───────────────┬──────────────────────────┘
                                 ↓ 知识片段（只进策略，不进文本）
                 ┌──────────────────────────────────────────┐
@@ -175,12 +175,12 @@ Skill 的上下文是有限资源，主文件越长，留给对话的越少。�
 | `references/self.md` | 约 7 KB | 建自我档案、写目标时 |
 | `references/style-guide.md` | 约 4 KB | 有风格卡或需要冷启动时 |
 | `references/profile.md` | 约 6 KB | 建档、改档、复核时 |
-| `references/routes.md` | 约 2.5 KB | 需要检索时 |
+| `references/routes.json` | 约 9 KB | `kb` 命令背后的数据，模型不直接读 |
 | `references/kb/**` | 416 KB | **按需 2–3 篇，永不整目录读取** |
 | `data/profile/{slot}.json` | 不定 | **只经 `brief` 注入，她那段 ≤380 字** |
 | `data/self.json` | 不定 | **只经 `brief` 注入，自我段 ≤170 字** |
 
-`scripts/validate_skill.py` 会检查主文件是否超出预算，以及 `routes.md` 里引用的路径是否都真实存在——断链的路由比没有路由更糟，它会让模型去猜文件名。
+`scripts/validate_skill.py` 会检查主文件是否超出预算，以及路由的三组一致性：声明的文件都存在、存在的文件都有归宿（路由或显式排除）、`routes.md` 与 `routes.json` 不漂移。断链的路由比没有路由更糟，它会让模型去猜文件名。
 
 ---
 

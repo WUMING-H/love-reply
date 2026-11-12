@@ -13,6 +13,7 @@
 守门：
     guard          检查一条候选是否踩到自己的底线、短板、硬目标，以及有没有落进具体细节
     verify         三条候选一次过内容闸门与表达闸门，输出判定表
+    kb             意图 × 阶段 → 该读的 2–3 篇知识（路由数据的唯一入口）
     prefs          他对策略的偏好统计（只影响排序，不参与准入）
 
 存储位置：%LOVE_REPLY_HOME%，未设置时用本 Skill 目录下的 data/
@@ -1179,6 +1180,26 @@ def cmd_prefs(args) -> int:
     return 0
 
 
+def cmd_kb(args) -> int:
+    """意图 × 阶段 → 该读的 2–3 篇。
+
+    以前这一步是一张 Markdown 表，模型看表再自己去 Read。表看漏一行、
+    文件名被改、路径写错，都不会有人报错——它只是少读一篇，而输出长得一样。
+    现在输出就是那几条路径，直接可以 Read；数据漂移由 kb_route 的审计兜住。
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import kb_route
+
+    try:
+        out = kb_route.route(args.intent, args.stage or "", args.danger,
+                             tuple(args.flag or ()))
+    except (KeyError, LookupError) as exc:
+        print(json.dumps({"ok": False, "error": str(exc).strip("'")}, ensure_ascii=False))
+        return 1
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    return 0
+
+
 def cmd_verify(args) -> int:
     """三条候选一次过两道闸门。
 
@@ -1446,6 +1467,18 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--danger", type=int, default=None, choices=range(0, 10),
                    help="判出来的危险度 0-9。≥7 时邀约和给方案一律拦下")
     p.set_defaults(func=cmd_verify)
+
+    p = sub.add_parser("kb", help="意图 × 阶段 → 该读的 2–3 篇知识")
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import kb_route as _kb
+    _data = _kb.load()
+    p.add_argument("--intent", required=True, choices=list(_data["intents"]),
+                   help="判出来的意图，六选一")
+    p.add_argument("--stage", default="", choices=[""] + list(STAGE))
+    p.add_argument("--danger", type=int, default=None, choices=range(0, 10))
+    p.add_argument("--flag", action="append", default=[],
+                   help="特殊情形，可重复：" + " / ".join(_data.get("flags", {})))
+    p.set_defaults(func=cmd_kb)
 
     p = sub.add_parser("prefs", help="他对策略的偏好统计（只影响排序）")
     slot_arg(p)

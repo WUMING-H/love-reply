@@ -83,7 +83,7 @@ python <skill>/scripts/profile_tool.py brief --slot couple_early --query "<这�
 
 **细节密度按阶段**：`stranger` 一个点就够，`couple_stable` 给到共同记忆，`repairing` 只认那一件事——细节越多越像辩解。
 
-知识（`references/routes.md`，按 `intent × stage` 读 2–3 篇）只影响策略，**一个术语都不许出现在候选里**。验收方法：把知识全删掉，候选应该一个字不变。
+知识：`profile_tool.py kb --intent <意图> --stage <阶段> --danger <n>` 出该读的 2–3 篇，特殊情形加 `--flag`（`--help` 列全）。**一个术语都不许出现在候选里**：把知识全删掉，候选应该一个字不变。
 
 **先取这次的样。** 他贴进来的这段对话里，他自己发的那几条就是最现成的样本——不用先攒语料，也不用先建卡。截图（多模态宿主直接看，右侧气泡是他）或文字都行，把他的话一行一条抽出来：
 
@@ -110,7 +110,7 @@ python <skill>/scripts/profile_tool.py verify --slot couple_early \
 
 每条带 `verdict` 和 `problems`。有 `fail` 就按 `problems` 改那一条，**别换策略重写**；全 `fail` 说明这组策略被阶段禁了，回头改组合。`notes` 里「没接住任何具体事实」在 `substantive` / `advance` / `repair` 三档当问题处理——说明还停在通用层。`danger ≥ 7` 时带 `--danger 7`。**`next` 说没跑阶段闸门、或 `group_problems` 非空，都不许发。**
 
-连改两次不过，就用未改写的版本：**宁可不像，不要为像而失真。** 不通过就重写，不要向用户解释过程。
+连改两次不过就用未改写的版本：**宁可不像，不要为像而失真。** 不解释过程。
 
 ### 辅助：写回与点选
 
@@ -189,4 +189,4 @@ python <skill>/scripts/style_tool.py feedback --slot couple_early --kind edited 
 
 `data/profile/` 有多份时，先问「这次是哪一个」，不要自己挑一个默默往下走。
 
-细则在 `references/`（`judge` 判据 / `compose` 写法 / `style-guide` 风格 / `profile` 她 / `self` 我与目标 / `stages` 阶段 / `routes` 知识路由），设计背景在 `documentation/`。
+细则在 `references/`（`judge` 判据 / `compose` 写法 / `style-guide` 风格 / `profile` 她 / `self` 我与目标 / `stages` 阶段），设计背景在 `documentation/`。

@@ -63,7 +63,7 @@
 **细节密度看阶段**：`stranger` 一个点够，`couple_stable` 给到共同记忆，`repairing` 只认那一件事——
 细节越多越像辩解。
 
-知识（`references/routes.md`，按 `intent × stage` 读 2–3 篇）**只影响策略，不能进回复**。
+知识：`profile_tool.py kb --intent <意图> --stage <阶段> --danger <n>` 出该读的 2–3 篇，特殊情形加 `--flag`。**只影响策略，不能进回复**。
 依恋理论、非暴力沟通、情绪价值这类词一个都不许出现。验收：把知识删掉，候选应该一个字不变。
 
 **先取这次的样**：他贴的这段里他自己发的那几条就是样本（截图右侧气泡是他，或直接给文字），
@@ -151,8 +151,8 @@ python <skill>/scripts/style_tool.py feedback --slot couple_early --kind chosen 
 
 ```
 <skill>/  ← SKILL.md 与 AGENTS.md 所在目录
-├── references/   judge / compose / style-guide / routes / profile / self / stages / kb(43 篇)
-├── scripts/      style_tool.py · profile_tool.py · validate_skill.py
+├── references/   judge / compose / style-guide / routes(.md + .json) / profile / self / stages / kb(43 篇)
+├── scripts/      style_tool.py · profile_tool.py · kb_route.py · validate_skill.py
 ├── documentation/
 └── data/         style/ · profile/(含 goals) · self.json · feedback.jsonl（不进版本库）
 ```

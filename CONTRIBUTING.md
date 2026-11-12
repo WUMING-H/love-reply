@@ -25,7 +25,7 @@
 python scripts/validate_skill.py
 ```
 
-会检查：必需文件是否存在、`routes.md` 里的路径是否全部可达、`SKILL.md` 是否超出上下文预算。
+会检查：必需文件是否存在、知识路由的三组一致性（文件在不在、有没有归宿、表与数据是否一致）、`SKILL.md` 是否超出上下文预算。改了 `references/routes.json` 记得先跑 `python scripts/kb_route.py render`。
 
 风格脚本的改动，至少跑一次正向与反向用例：
 

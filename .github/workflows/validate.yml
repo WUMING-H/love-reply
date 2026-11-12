@@ -45,6 +45,13 @@ jobs:
           printf '%s\n' "行" "咋了" "先这样 睡了啊" "出来吃个饭？我请" > /tmp/me.txt
           python scripts/style_tool.py sample --file /tmp/me.txt --slot ci
 
+      - name: Knowledge routing
+        run: |
+          python scripts/kb_route.py coverage
+          python scripts/kb_route.py render --check
+          python scripts/profile_tool.py kb --intent vent --stage couple_early --danger 5
+          python scripts/profile_tool.py kb --intent casual --flag 危机
+
       - name: Evaluation suite
         run: python scripts/eval_skill.py
 

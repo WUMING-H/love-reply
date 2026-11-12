@@ -9,7 +9,7 @@
 - **许可**：MIT License（完整条款见 `licenses/goutoujunshi-LICENSE`）
 - **范围**：`references/kb/knowledge/`（20 篇）与 `references/kb/practical/`（23 篇），共 43 篇 Markdown
 - **修改情况**：**未修改原文**。仅调整了存放路径（保留 `knowledge/` `practical/` 两级目录结构，以维持文档间的相对链接）。
-- **本项目新增**：检索路由表 `references/routes.md`、各篇的调用时机说明（见 `documentation/knowledge-base.md`）均为原创，不属于上游内容。
+- **本项目新增**：检索路由数据 `references/routes.json` 与由它生成的 `references/routes.md`、各篇的调用时机说明（见 `documentation/knowledge-base.md`）均为原创，不属于上游内容。
 
 该知识库在流程中承担检索依据的角色：生成候选前按需读取 2–3 篇作为策略参考，不参与模型训练，原文不进入输出文本。
 

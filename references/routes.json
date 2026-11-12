@@ -1,0 +1,286 @@
+{
+  "version": 1,
+  "max_files": 3,
+  "principle": "一次最多读 3 篇。塞满了不是更准，是开始念经——输出变成理论综述，不是一句能发出去的话。",
+  "intents": {
+    "vent": {
+      "label": "生气 / 委屈",
+      "matrix": [
+        {
+          "when": {
+            "danger_min": 7
+          },
+          "files": [
+            "knowledge/07-沟通冲突与修复.md",
+            "knowledge/15-分手背叛与关系修复.md",
+            "practical/万能吵架技巧：理性冲突处理指南.md"
+          ]
+        },
+        {
+          "when": {
+            "danger_min": 4,
+            "danger_max": 6
+          },
+          "files": [
+            "knowledge/07-沟通冲突与修复.md",
+            "practical/为他人提供情绪价值：温暖且有效的回应指南.md"
+          ]
+        },
+        {
+          "when": {},
+          "files": [
+            "practical/为他人提供情绪价值：温暖且有效的回应指南.md",
+            "knowledge/03-依恋理论与情绪调节.md"
+          ]
+        }
+      ]
+    },
+    "confirm_care": {
+      "label": "试探你在不在意",
+      "note": "她要的不是解释，是「你记得」。给具体的复述 > 保证 > 道歉。",
+      "matrix": [
+        {
+          "when": {},
+          "files": [
+            "knowledge/03-依恋理论与情绪调节.md",
+            "practical/为他人提供情绪价值：温暖且有效的回应指南.md"
+          ]
+        }
+      ]
+    },
+    "request_action": {
+      "label": "真要一个动作 / 时间",
+      "note": "给死时间，不给「看看吧」。",
+      "matrix": [
+        {
+          "when": {
+            "stage": [
+              "stranger",
+              "warming"
+            ]
+          },
+          "files": [
+            "knowledge/06-吸引约会与关系启动.md",
+            "practical/主动表达、第一次见面与自然接触.md"
+          ]
+        },
+        {
+          "when": {
+            "stage": [
+              "dating"
+            ]
+          },
+          "files": [
+            "knowledge/06-吸引约会与关系启动.md",
+            "practical/主动表达、第一次见面与自然接触.md",
+            "practical/场景感、松弛感与社交校准：从接话到关系推进.md"
+          ]
+        },
+        {
+          "when": {},
+          "files": [
+            "knowledge/07-沟通冲突与修复.md",
+            "practical/实战话术编排器：从一句回复到后续分支.md"
+          ]
+        }
+      ]
+    },
+    "seek_explanation": {
+      "label": "要一个解释",
+      "note": "先答「发生了什么」，不要以道歉开头。道歉会让她觉得你在含糊。",
+      "matrix": [
+        {
+          "when": {},
+          "files": [
+            "knowledge/07-沟通冲突与修复.md",
+            "practical/提升表达逻辑性：从混乱到清晰的实用指南.md"
+          ]
+        }
+      ]
+    },
+    "casual": {
+      "label": "闲聊",
+      "note": "闲聊不要给方案、不要升华、不要总结。接住话头就行。",
+      "matrix": [
+        {
+          "when": {},
+          "files": [
+            "practical/巧妙接话技巧：让沟通更流畅的实用指南.md",
+            "practical/化解尴尬：轻松救场的实用指南.md"
+          ]
+        }
+      ]
+    },
+    "close_topic": {
+      "label": "和平收尾",
+      "note": "别再补一句。收尾了就收，多说一句反而重启话题。",
+      "matrix": [
+        {
+          "when": {},
+          "files": [
+            "practical/巧妙接话技巧：让沟通更流畅的实用指南.md"
+          ]
+        }
+      ]
+    }
+  },
+  "flags": {
+    "危机": {
+      "applies": "跟踪、威胁、自伤、暴力",
+      "mode": "replace",
+      "stop": true,
+      "files": [
+        "knowledge/17-中国法律安全与危机转介.md"
+      ],
+      "note": "唯一一篇。停止给话术，只给求助渠道。"
+    },
+    "操控": {
+      "applies": "对方在贬低 / 操控你，或你想用操控手段",
+      "mode": "prepend",
+      "files": [
+        "knowledge/05-PUA操控与伦理替代.md"
+      ],
+      "note": "读到操控手法就换成伦理替代，不教怎么拿捏人。"
+    },
+    "分手": {
+      "applies": "分手、出轨、复合",
+      "mode": "prepend",
+      "files": [
+        "knowledge/15-分手背叛与关系修复.md"
+      ],
+      "note": "先分清是结束还是修复，两件事的话不能混着说。"
+    },
+    "投入": {
+      "applies": "关系投入不平衡、单方面付出",
+      "mode": "prepend",
+      "files": [
+        "practical/关系投入失衡：互惠判断、降级投入与退出决策.md"
+      ],
+      "note": "先判断互惠，再决定加码还是降级；别用更多付出换回她的回应。"
+    },
+    "拒绝": {
+      "applies": "要拒绝对方",
+      "mode": "prepend",
+      "files": [
+        "practical/高情商拒绝他人：体面护边界的实用指南.md"
+      ],
+      "note": "拒绝给的是边界，不是理由。理由越多越像在谈条件。"
+    },
+    "异地": {
+      "applies": "异地、线上为主",
+      "mode": "prepend",
+      "files": [
+        "knowledge/09-在线约会与数字关系.md"
+      ],
+      "note": "线上没有语气和表情，宁可多打两个字，别让她猜。"
+    },
+    "边界": {
+      "applies": "涉及性、边界、同意",
+      "mode": "prepend",
+      "files": [
+        "knowledge/08-同意边界性与亲密.md"
+      ],
+      "note": "不替她表态，也不把「没拒绝」当同意。"
+    },
+    "家务钱": {
+      "applies": "涉及钱、家务、双方家庭",
+      "mode": "prepend",
+      "files": [
+        "knowledge/12-金钱家务育儿与双方家庭.md"
+      ],
+      "note": "这类争执吵的是分配是否公平，不是这一句话。"
+    },
+    "依据": {
+      "applies": "需要判断某个说法有没有依据",
+      "mode": "prepend",
+      "files": [
+        "knowledge/01-证据分级与内容边界.md"
+      ],
+      "note": "证据分级的用处是让你别把猜测说成规律。"
+    },
+    "夸": {
+      "applies": "要夸她，或她刚做了件值得说一句的事",
+      "mode": "prepend",
+      "files": [
+        "practical/万能夸人的话术技巧：真诚认可的实用指南.md"
+      ],
+      "note": "夸具体的那个动作，不夸「你真好」——泛夸听起来像客套。"
+    },
+    "冷": {
+      "applies": "她回得很冷、已读不回、你一直被动接话",
+      "mode": "prepend",
+      "files": [
+        "practical/聊天化被动为主动：引导互动的实用指南.md"
+      ],
+      "note": "被动的时候不要靠追问拿回应，靠一个她愿意接的话头。"
+    },
+    "轻松": {
+      "applies": "本来就没正事，只需要把话接住、别把气氛搞严肃",
+      "mode": "prepend",
+      "files": [
+        "practical/废话文学回复指南：轻松应对各类场景.md"
+      ],
+      "note": "这种场合说得有内容反而是错，接住情绪就行。"
+    },
+    "截图": {
+      "applies": "要分析一段聊天记录或截图",
+      "mode": "prepend",
+      "files": [
+        "practical/ChatLab聊天记录分析适配.md"
+      ],
+      "note": "先分出谁说的哪句，再谈措辞；头像昵称不进档案。"
+    },
+    "记忆": {
+      "applies": "要决定这次对话里什么值得写进档案",
+      "mode": "prepend",
+      "files": [
+        "practical/长期记忆与关系档案.md"
+      ],
+      "note": "记事实和承诺，不记她的情绪波动；认知带置信度。"
+    }
+  },
+  "reference_only": [
+    {
+      "file": "practical/00-导读与使用分级.md",
+      "ref": "references/routes.md",
+      "note": "整库的分级与伦理边界：哪些当方法用，哪些只当背景"
+    },
+    {
+      "file": "practical/自然流、内在状态与结构化互动：伦理能力转译.md",
+      "ref": "references/routes.md",
+      "note": "把任何技巧转成不端着的说法，防「像话术库」"
+    },
+    {
+      "file": "practical/公开表达案例的伦理转译.md",
+      "ref": "references/routes.md",
+      "note": "引用案例前怎么脱敏、怎么不变成操控模板"
+    }
+  ],
+  "exclude": [
+    {
+      "reason": "讲的是职场与泛社交，不是和某一个人的下一句。进恋爱路由只会污染候选",
+      "files": [
+        "practical/获得领导青睐：从价值匹配到信任建立的实用指南.md",
+        "practical/有效拓展人脉：从建立到维护的实用指南.md",
+        "practical/托人办事的高效话术指南.md",
+        "practical/提高气场：从内到外的力量感塑造指南.md",
+        "practical/被孤立如何破局：从自我调适到建立连接的实用指南.md"
+      ]
+    },
+    {
+      "reason": "回答的是「为什么」不是「下一句」。背景与参考，需要时人工查，不进自动路由",
+      "files": [
+        "knowledge/02-亲密关系心理学总论.md",
+        "knowledge/04-MBTI人格与匹配.md",
+        "knowledge/10-恋爱哲学.md",
+        "knowledge/11-婚姻家庭与生命周期.md",
+        "knowledge/13-现代婚姻变迁史.md",
+        "knowledge/14-社会发展与家庭变迁.md",
+        "knowledge/16-多元关系与反刻板印象.md",
+        "knowledge/18-实用练习与对话卡.md",
+        "knowledge/19-核心书单与论文索引.md",
+        "knowledge/20-经典社交体系的机制、证据与风险边界.md"
+      ]
+    }
+  ]
+}

@@ -35,6 +35,8 @@ REQUIRED = [
     "scripts/style_tool.py",
     "scripts/profile_tool.py",
     "scripts/eval_skill.py",
+    "scripts/kb_route.py",
+    "references/routes.json",
     "scripts/blind_test.py",
     "evals/cases.jsonl",
     "licenses/goutoujunshi-LICENSE",
@@ -712,6 +714,79 @@ def check_verify_hardening() -> None:
             os.environ["LOVE_REPLY_HOME"] = old
 
 
+def check_kb_routes() -> None:
+    """知识路由：43 篇里谁能到达、路径是否真实存在、表和数据是否一致。
+
+    以前路由是一张 Markdown 表，模型自己看、自己去找。改文件名、写错路径、
+    某个意图的入口被删光，都不会有人报错——只是少读一篇，而输出长得一样。
+    """
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import kb_route
+
+    data = kb_route.load()
+    report = kb_route.audit()
+
+    if report["missing"]:
+        errors.append(f"路由指向不存在的知识文件：{'、'.join(report['missing'][:3])}")
+    if report["orphans"]:
+        errors.append("知识库有文件谁也到不了（进路由，或写进 exclude 说明理由）："
+                      + "、".join(report["orphans"][:3]))
+    if report["overlap"]:
+        errors.append("同一篇知识被同时声明为可路由与不可路由："
+                      + "、".join(report["overlap"][:3]))
+    if report["dangling_refs"]:
+        errors.append("参考入口指向不存在的文档或文档里没提到它：" + "；".join(report["dangling_refs"][:2]))
+    if report["unreachable_intents"]:
+        errors.append("有意图在任何阶段都路由不出篇目：" + "；".join(report["unreachable_intents"][:2]))
+
+    # 表是派生物。两套不一致时，模型读到的是旧表，人维护的是新数据。
+    doc_path = ROOT / "references" / "routes.md"
+    doc = doc_path.read_text(encoding="utf-8") if doc_path.exists() else ""
+    if kb_route.BEGIN not in doc or kb_route.END not in doc:
+        errors.append("routes.md 里没有生成块标记，无法和 routes.json 比对")
+    else:
+        cur = doc[doc.index(kb_route.BEGIN): doc.index(kb_route.END) + len(kb_route.END)] + "\n"
+        if cur != kb_route.render():
+            errors.append("routes.md 的表格块与 routes.json 不一致：跑 scripts/kb_route.py render")
+
+    stages = ("", "stranger", "warming", "dating", "couple_early", "couple_stable", "repairing")
+    checked = 0
+    for intent in data["intents"]:
+        for stage in stages:
+            for danger in (None, 3, 8):
+                out = kb_route.route(intent, stage, danger)
+                checked += 1
+                if not out["files"]:
+                    errors.append(f"路由空洞：{intent} / {stage or '任意阶段'} / danger={danger} 没有篇目")
+                    continue
+                if out["count"] > data["max_files"]:
+                    errors.append(f"路由超限：{intent} 给出 {out['count']} 篇，上限 {data['max_files']}")
+                if len(set(out["files"])) != len(out["files"]):
+                    errors.append(f"路由有重复篇目：{intent} / {stage or '任意阶段'}")
+                for f in out["files"]:
+                    if not (ROOT / f).exists():
+                        errors.append(f"路由给出的路径不存在：{f}")
+
+    # 危机是唯一会改变任务性质的 flag：读到它就只该剩一件事
+    crisis = kb_route.route("vent", "couple_early", 8, ("危机",))
+    if not crisis["stop"] or crisis["count"] != 1 or "17-" not in crisis["files"][0]:
+        errors.append("危机 flag 没有收敛成「只读 17 号那篇、并停止给话术」")
+
+    # 补进路由的材料必须真的取得到，否则只是从「躺平」变成「名义上可达」
+    reachable: set[str] = set()
+    for intent in data["intents"]:
+        for stage in stages:
+            reachable.update(kb_route.route(intent, stage, 5)["files"])
+    for flag in data.get("flags", {}):
+        reachable.update(kb_route.route("casual", "", None, (flag,))["files"])
+    for kw in ("万能夸人", "废话文学", "聊天化被动为主动", "ChatLab", "长期记忆"):
+        if not any(kw in f for f in reachable):
+            errors.append(f"声称补进了路由，实际取不到：{kw}")
+
+    print(f"  知识路由：{report['on_disk']} 篇 · 可路由 {report['declared']} · "
+          f"仅参考 {report['reference_only']} · 排除 {report['excluded']} · 取路 {checked} 次")
+
+
 def check_gitignore() -> None:
     p = ROOT / ".gitignore"
     if not p.exists():
@@ -739,6 +814,7 @@ def main() -> int:
     check_feedback_loop()
     check_blind_test()
     check_verify_hardening()
+    check_kb_routes()
     check_self_and_gate()
     check_gitignore()
 
