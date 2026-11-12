@@ -114,17 +114,34 @@ Output is deliberately short: under 120 characters of commentary, judgment on th
 Without a card you get "how a normal person would reply". With one you get "how you would reply".
 
 ```bash
+# no corpus needed: pull your own lines out of the conversation you just pasted
+python scripts/style_tool.py sample --file my_lines.txt --slot couple_early
+
 python scripts/style_tool.py profile --file my_messages.txt --slot couple_early
 python scripts/style_tool.py check --text "下周六开幕" --strategy minimal
+
+# record what you actually picked, and how you rewrote it
+python scripts/style_tool.py feedback --slot couple_early --kind chosen \
+  --strategy minimal --ai "周六 我过去"
 python scripts/style_tool.py feedback --slot couple_early --kind edited \
-  --ai "周六下午我去接你" --user "周六 我过去"
+  --strategy minimal --ai "周六下午我去接你" --user "周六 我过去"
 ```
 
 `profile` computes length distribution, terminal-period rate, emoji density, short-sentence ratio and particle density, then **derives a forbidden list from what you never do**: no emoji in your corpus becomes "no emoji". Negative constraints are executable; "be witty" is not. The `avoid` list does the real work, not the sentence summarising your style.
 
 Slots exist (`couple_early`, `couple_stable`, `friend`, `work`) to prevent bleed — affectionate phrasing aimed at a partner will misfire on a colleague.
 
+**You rarely have a corpus, and that is the normal case.** The lines you already sent are sitting in the conversation you just pasted — your own bubbles are on the right. `sample` measures those and produces a card for this one reply.
+
+Below twelve messages it gives you only the forbidden list, never a length ceiling: in a single conversation you may be writing short *because she is angry*, and the median of six messages is that evening's state, not your habit. Such cards are marked `small_sample` and `check` falls back to absolute ceilings — the `avoid` entries still apply, because "you never do X" does not depend on a distribution.
+
+Sampled cards are not written to disk by default. `--save` stores one, and it will not overwrite a corpus card unless you pass `--force`.
+
 The most valuable feedback is not "option 2" but "not me, I'd say XX". Your rewrite enters the sample pool and becomes the reference next time.
+
+**Feedback used to be a dead end** — the log was written and never read, which is worse than not having it, because it makes you believe the thing is getting more accurate. It is now wired in: after five votes `verify` adds a `habit` line naming the strategy you reach for, and an edit rate above 40% suggests the style card has drifted.
+
+With one hard limit: **preference only ranks, it never admits.** No number of votes will let a stage-forbidden strategy through, otherwise you get "you like this tone, so here is an invitation during the repair period". That is precisely what the stage gate exists to prevent.
 
 ## Relationship profile
 
@@ -146,6 +163,17 @@ Two entries change output the most: **landmines** (so it never hands you a lectu
 The profile is also forbidden from touching `danger`. Danger is read from the current exchange only — a tense month does not make "what's for dinner" a 5.
 
 Reads expire. `stale` lists what has not been confirmed in 60 days; `accept` refreshes one, `forget` drops it. A profile left untouched describes a person who no longer exists, and acting on it is worse than having none.
+
+**Tag facts when you record them, or they will never come back.** This was measured: "she doesn't eat mango" was stored, then "I want to buy her some fruit" retrieved nothing — because two Chinese sentences phrased differently share no characters, and no similarity weighting fixes zero overlap either.
+
+```bash
+python scripts/profile_tool.py add --slot couple_early --kind fact \
+  --text "她不吃芒果" --tag 芒果 水果 过敏 --core
+```
+
+`--tag` takes category words and is matched alongside the text. `--core` marks the entries that must be obeyed rather than recalled — allergies, dislikes, birthdays — and those skip retrieval and ride along every time. **Retrieval is a probability, compliance is an obligation**; the two do not belong in the same mechanism.
+
+No vector search, deliberately: tags are written by the person who knows, so they are inspectable and fixable. An embedding model that retrieves the wrong thing gives you neither.
 
 ## Stage is a gate, not a parameter
 
@@ -180,12 +208,44 @@ Goals have five directions — `advance`, `hold`, `repair`, `exit`, `understand`
 
 When goal and stage conflict, stage wins. The correct output is not to abandon the goal but to say so: "this lands wrong today; first settle the thing from last week."
 
+## How you know it hasn't broken
+
+Change one instruction, loosen one gate: the effect is immediate, the damage is delayed. By the time "replies feel off lately" reaches you, three versions have shipped and you no longer know which one to roll back to.
+
+So there is a fixed suite: `evals/cases.jsonl`, twenty-four scenes covering all six stages and all six strategies. Each scene declares three candidates that **must pass** and one or two that **must be blocked**, checked by `scripts/eval_skill.py` with mechanical assertions only.
+
+```bash
+python scripts/eval_skill.py        # offline, no model calls, no style card needed
+```
+
+```text
+24 cases
+  good candidates 72 · passed 72 · wrongly blocked 0
+  bad candidates  29 · blocked 29 · let through 0
+  coverage: stages 6/6 · strategies 6/6
+result: all passed
+```
+
+**It tests the floor, not the ceiling.** Whether a stage-forbidden strategy was blocked, whether an overlong line was cut, whether jargon leaked into a candidate, whether hard goals and self-limits fired — all mechanically checkable. It cannot tell you whether a line was *good*; that needs a human or a blind test. Accepting that boundary is more useful than building an evaluator that gives itself high marks.
+
+**It caught a real bug on day one.** Three cases went red, and one was not a bad test: the two-character reply 「没有」 was rejected as "too short, may have lost information". In Chinese chat 「没有」「不去」「好啊」 are the most common answers, and forcing them longer is distortion, not improvement.
+
+Adding a scene needs no code — append a line:
+
+```json
+{"id":"c5","stage":"couple_early","paste":"她：算了 不说了","traps":"withdrawing is not resolving",
+ "good":[{"strategy":"minimal","text":"…"},{"strategy":"care","text":"…"},{"strategy":"repair","text":"…"}],
+ "bad":[{"strategy":"advance","text":"…","gate":"content","why":"no advancing during repair"}]}
+```
+
+`gate` is `content`, `style`, `term` or `either`. The cases are checked too: fewer than three passing candidates, overlapping strategies, or a misspelled stage name fails the run.
+
 ## Structure
 
 ```text
 love-reply/
-├── SKILL.md                 # entry: eight steps, output contract, hard rules
-├── AGENTS.md                # same flow for AGENTS.md hosts (Codex, Cursor)
+├── SKILL.md                 # entry: judge → write → gate, output contract, hard rules
+├── AGENTS.md                # derived from SKILL.md, for AGENTS.md hosts (Codex, Cursor)
 ├── references/
 │   ├── judge.md             # 7 questions, Chinese subtext traps, misreads
 │   ├── compose.md           # candidate strategies, danger tiers, promises
@@ -200,10 +260,13 @@ love-reply/
 │   ├── profile-interview.md # twelve questions: her profile
 │   └── self-interview.md    # twelve questions: your profile and goals
 ├── scripts/
-│   ├── style_tool.py        # profile / check / feedback / show
-│   ├── profile_tool.py      # her / you / goals / stage card / guard
-│   └── validate_skill.py    # integrity and smoke tests
-├── documentation/           # architecture, flows, knowledge base, style, stages, self, safety
+│   ├── style_tool.py        # profile / sample / check / feedback / show
+│   ├── profile_tool.py      # her / you / goals / stage card / guard / verify / prefs
+│   ├── eval_skill.py        # floor tests over fixed scenes
+│   └── validate_skill.py    # integrity: files, required sections, entry-point agreement
+├── evals/
+│   └── cases.jsonl          # 24 scenes: candidates that must pass, candidates that must fail
+├── documentation/           # architecture, flows, knowledge base, style, stages, self, evaluation, safety
 └── data/                    # style/, profile/ (+goals), self.json, feedback (git-ignored)
 ```
 
@@ -233,6 +296,12 @@ The standalone prompt is self-contained — judgement, candidates, style rules, 
 - Sending messages on your behalf.
 - Manipulation: manufactured anxiety, silent treatment as pressure, fake personas, "testing" people.
 - Fine-tuning a small model; a style card is one JSON edit away.
+
+## Maintenance
+
+Full release notes in [CHANGELOG.md](CHANGELOG.md). Current version: **0.9.0**.
+
+Contributions welcome — knowledge, criteria, test scenes, failure reports. Read [CONTRIBUTING.md](CONTRIBUTING.md) first. The most valuable contribution is an anonymised real scene, especially one where the judgment was wrong.
 
 ## Credits and licensing
 
