@@ -1,5 +1,6 @@
 # 个人数据，不进入版本库
 data/
+rounds/
 *.sqlite3
 feedback.jsonl
 

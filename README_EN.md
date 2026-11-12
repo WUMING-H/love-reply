@@ -240,6 +240,39 @@ Adding a scene needs no code — append a line:
 
 `gate` is `content`, `style`, `term` or `either`. The cases are checked too: fewer than three passing candidates, overlapping strategies, or a misspelled stage name fails the run.
 
+### Blind test: recognition rate is where a real score comes from
+
+The suite proves the gates are still shut. It cannot prove the rewrites *sound like you*. Only a person can tell.
+
+Put lines you actually sent next to rewrites of the same scene, shuffle left/right, and ask one question per item: "which one did I send?" A recognition rate near 50% means the rewrites blend in. Near 100% means something in them still reads as not-you.
+
+```bash
+# one line per item: mine = what you really sent, generated = the rewrite
+python scripts/blind_test.py make --in lines.jsonl --out rounds/r1 --seed 7
+# open rounds/r1/sheet.md, then pass your answers as one line ("-" skips)
+python scripts/blind_test.py score --round rounds/r1 --picks "B,A,B,-,A,A,B,A,B,B"
+```
+
+```text
+blind test · r1
+  items: 10
+  recognition: 5/10 = 50%   (chance = 50%)
+  exact two-sided p = 1.000, one-sided p = 0.623 (n=10, no normal approximation)
+  position: A 5, B 5
+  length cue: 60% of items lean the same way
+  verdict: indistinguishable — these rewrites blend in
+```
+
+Three conditions that **void** the result, enforced in code rather than left to discipline:
+
+- **Fewer than eight items.** 8/8 gives p≈0.004, 7/10 gives p=0.035, 6/10 gives nothing. Too few items, no conclusion.
+- **85% or more answers on one side.** That is clicking by position, not reading.
+- **Recognition at or below 20%.** Reverse of expected — check whether the key was peeked at, or lengths were guessed.
+
+Answers live in `key.json`; `sheet.md` holds only the two lines. **The one thing that makes this valid is not seeing the answer while judging** — so `validate` asserts the sheet never contains a label, and goes red if you add one. `rounds/` is in `.gitignore`: it holds real conversations.
+
+`lines.jsonl` is not `evals/cases.jsonl`: the latter feeds the gates and uses `good` / `bad`; the blind test needs `mine` and `generated`. Run `python scripts/blind_test.py template` if you forget the shape.
+
 ## Structure
 
 ```text
@@ -263,6 +296,7 @@ love-reply/
 │   ├── style_tool.py        # profile / sample / check / feedback / show
 │   ├── profile_tool.py      # her / you / goals / stage card / guard / verify / prefs
 │   ├── eval_skill.py        # floor tests over fixed scenes
+│   ├── blind_test.py        # recognition rate, exact binomial, void conditions
 │   └── validate_skill.py    # integrity: files, required sections, entry-point agreement
 ├── evals/
 │   └── cases.jsonl          # 24 scenes: candidates that must pass, candidates that must fail

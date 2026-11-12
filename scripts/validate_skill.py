@@ -35,6 +35,7 @@ REQUIRED = [
     "scripts/style_tool.py",
     "scripts/profile_tool.py",
     "scripts/eval_skill.py",
+    "scripts/blind_test.py",
     "evals/cases.jsonl",
     "licenses/goutoujunshi-LICENSE",
 ]
@@ -539,6 +540,67 @@ def check_feedback_loop() -> None:
             os.environ["LOVE_REPLY_HOME"] = old
 
 
+def check_blind_test() -> None:
+    """盲测冒烟：表里不能有答案，认出率不能永远绿。
+
+    这套东西唯一的价值在于「判的时候看不见答案」。如果 sheet.md 混进了
+    mine/gen 字样，或者怎么答都通过，它就只是个仪式。这里断言四件：
+    标签不泄漏、几乎没改写的条目被剔除、全认对判红、全选同一侧判作废。
+    """
+    import contextlib
+    import io
+    import tempfile
+
+    sys.path.insert(0, str(ROOT / "scripts"))
+    tmp = Path(tempfile.mkdtemp(prefix="love-reply-bt-"))
+    cases = tmp / "cases.jsonl"
+    rows = [{"id": f"t{i}", "context": "她：在吗", "mine": f"在 咋了{i}",
+             "generated": f"在的，请问有什么事情吗{i}"} for i in range(10)]
+    rows.append({"id": "dup", "mine": "在 咋了", "generated": "在 咋了"})
+    cases.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n",
+                     encoding="utf-8")
+    round_dir = tmp / "r1"
+
+    try:
+        import blind_test
+
+        def run(argv) -> tuple[int, str]:
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                code = blind_test.main(argv)
+            return code, buf.getvalue()
+
+        run(["make", "--in", str(cases), "--out", str(round_dir), "--seed", "5"])
+        sheet = (round_dir / "sheet.md").read_text(encoding="utf-8")
+        key = json.loads((round_dir / "key.json").read_text(encoding="utf-8"))
+        if "mine" in sheet or "a_is" in sheet:
+            errors.append("盲测冒烟失败：表格里带了答案标签，等于把答案写在卷面上")
+        if key["n"] != 10 or not key["excluded"]:
+            errors.append("盲测冒烟失败：几乎没改写的条目没被剔除（或条数算错）")
+
+        right = ["A" if it["a_is"] == "mine" else "B" for it in key["items"]]
+        code, _ = run(["score", "--round", str(round_dir), "--picks", ",".join(right)])
+        if code != 1:
+            errors.append("盲测冒烟失败：全认对了却没判红，认出率是个装饰")
+
+        opposite = ["B" if p == "A" else "A" for p in right]
+        half = right[:5] + opposite[5:]
+        code, out = run(["score", "--round", str(round_dir), "--picks", ",".join(half), "--json"])
+        summary = json.loads(out.strip().splitlines()[-1])
+        if abs(summary["rate"] - 0.5) > 1e-9 or summary["code"] == 1:
+            errors.append(f"盲测冒烟失败：一半认对的算出 {summary['rate']}，或仍判红")
+
+        code, _ = run(["score", "--round", str(round_dir), "--picks", ",".join(["A"] * 10)])
+        if code != 2:
+            errors.append("盲测冒烟失败：全选同一侧没有判作废（位置偏好没兜住）")
+
+        print("  盲测冒烟：表无答案、近似条目剔除、全对判红、单侧判作废")
+    except SystemExit as exc:
+        errors.append(f"盲测冒烟失败：命令退出码 {exc.code}")
+    except Exception as exc:  # pragma: no cover
+        errors.append(f"盲测冒烟失败：{exc}")
+
+
 def check_gitignore() -> None:
     p = ROOT / ".gitignore"
     if not p.exists():
@@ -564,6 +626,7 @@ def main() -> int:
     check_profile()
     check_recall()
     check_feedback_loop()
+    check_blind_test()
     check_self_and_gate()
     check_gitignore()
 
