@@ -365,6 +365,7 @@ def cmd_feedback(args) -> int:
         "ts": datetime.now().astimezone().isoformat(timespec="seconds"),
         "slot": args.slot,
         "kind": args.kind,
+        "strategy": args.strategy or "",
         "ai_text": args.ai,
         "user_text": args.user,
     }
@@ -423,6 +424,7 @@ def main() -> int:
     f = sub.add_parser("feedback", help="记录点选或改写")
     f.add_argument("--slot", default="couple_early")
     f.add_argument("--kind", required=True, choices=["chosen", "rejected", "edited"])
+    f.add_argument("--strategy", default="", help="这条候选用的策略，用来统计他的偏好")
     f.add_argument("--ai", required=True)
     f.add_argument("--user", default="")
     f.add_argument("--scene", default="")

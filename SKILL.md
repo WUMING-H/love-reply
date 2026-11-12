@@ -112,7 +112,7 @@ python <skill>/scripts/profile_tool.py verify --slot couple_early \
 
 连改两次不过，就用未改写的版本：**宁可不像，不要为像而失真。** 不通过就重写，不要向用户解释过程。
 
-### 辅助：写回
+### 辅助：写回与点选
 
 只在出现下面四类内容时问一句，**一次对话最多问一次**。用户说「记」就 `add`，说「不用」就当没发生，不要追问理由。
 
@@ -126,6 +126,15 @@ python <skill>/scripts/profile_tool.py verify --slot couple_early \
 录事实时补两样，否则以后召不回：**`--tag` 写类别词**（`她不吃芒果` → `--tag 芒果 水果 过敏`），**`--core` 标「说了就必须遵守」的**（忌口、过敏、生日）。他提问是转述、档案存的是原话，两句话换种说法就一个字都不共，只靠字面匹配等于没录。
 
 **他说的话比她的信息更值钱**——一个定方向，一个只定细节。他主动纠正你的时候（「不是这样，她其实是……」）那是最有价值的输入：先按他的说法改候选，再问要不要把这条写进档案。没新信息就什么都不做，每次结尾弹一句「要不要记录」比不记更烦。
+
+他选了哪条、或改成了什么，记一行——这是风格层唯一的反馈信号：
+
+```bash
+python <skill>/scripts/style_tool.py feedback --slot couple_early --kind chosen --strategy minimal --ai "<他选的那条>"
+python <skill>/scripts/style_tool.py feedback --slot couple_early --kind edited --strategy minimal --ai "<你给的>" --user "<他改成的>"
+```
+
+攒够五票后 `verify` 会多一行 `habit`；改写率过高会提示风格卡偏松。**它只影响排序，不改闸门**——偏好再明显，阶段禁用的策略也不能出现，否则就成了「因为你好这口，所以修复期也给你一条邀约」。
 
 ## 输出格式
 

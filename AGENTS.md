@@ -100,6 +100,15 @@ python <skill>/scripts/profile_tool.py goal add --slot couple_early --kind advan
 
 **他说的话比她的信息值钱**：一个定方向，一个只定细节。
 
+他选了哪条、或改成了什么，记一行——这是风格层唯一的反馈信号：
+
+```bash
+python <skill>/scripts/style_tool.py feedback --slot couple_early --kind chosen --strategy minimal --ai "<他选的那条>"
+```
+
+攒够五票后 `verify` 会多一行 `habit`。**它只影响排序，不改闸门**——偏好再明显，阶段禁用的
+策略也不能出现，否则就成了「因为你好这口，所以修复期也给你一条邀约」。
+
 ## 输出格式
 
 ```

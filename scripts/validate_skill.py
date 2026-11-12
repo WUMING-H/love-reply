@@ -66,6 +66,8 @@ CONTENT_SPECS: dict[str, list[tuple[str, str]]] = {
         ("硬约束章节", r"^## 硬约束"),
         ("危机转介入口", r"危机转介\.md"),
         ("多份档案先问", r"多份时，先问"),
+        ("点选记录入口", r"feedback --slot"),
+        ("偏好不改闸门", r"只影响排序，不改闸门"),
         ("无 bash 走 standalone", r"prompts/standalone\.md"),
     ],
     "AGENTS.md": [
@@ -81,6 +83,8 @@ CONTENT_SPECS: dict[str, list[tuple[str, str]]] = {
         ("输出反面例子", r"反面例子"),
         ("硬约束章节", r"^## 硬约束"),
         ("多份档案先问", r"多份时，先问"),
+        ("点选记录入口", r"feedback --slot"),
+        ("偏好不改闸门", r"只影响排序，不改闸门"),
     ],
     "prompts/standalone.md": [
         ("四条原则（与主文件同一套）", r"四条原则"),
@@ -466,6 +470,75 @@ def check_recall() -> None:
             os.environ["LOVE_REPLY_HOME"] = old
 
 
+def check_feedback_loop() -> None:
+    """反馈闭环冒烟：写了要有人读，读了不能改闸门。
+
+    feedback.jsonl 曾经只写不读，没有任何代码碰它，等于一个假装在学习的功能。
+    这里断言三件：五票之后 verify 带出偏好、票数不够时闭嘴、偏好不改变通过与否。
+    """
+    import contextlib
+    import io
+    import tempfile
+
+    tmp = tempfile.mkdtemp(prefix="love-reply-fb-")
+    old = os.environ.get("LOVE_REPLY_HOME")
+    os.environ["LOVE_REPLY_HOME"] = tmp
+    sys.path.insert(0, str(ROOT / "scripts"))
+    try:
+        import profile_tool
+        import style_tool
+
+        def quiet(mod, argv) -> str:
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                if mod is style_tool:
+                    saved = sys.argv
+                    sys.argv = ["style_tool.py"] + list(argv)
+                    try:
+                        mod.main()
+                    finally:
+                        sys.argv = saved
+                else:
+                    mod.main(argv)
+            return buf.getvalue()
+
+        quiet(profile_tool, ["init", "--slot", "fb", "--stage", "couple_early"])
+        quiet(profile_tool, ["init", "--slot", "fb2", "--stage", "couple_early"])
+        # 票数不够时必须闭嘴：三次里两次选 A，可能只是那天只有 A 能用
+        for _ in range(2):
+            quiet(style_tool, ["feedback", "--slot", "fb2", "--kind", "chosen",
+                               "--strategy", "minimal", "--ai", "嗯 我到了"])
+        if json.loads(quiet(profile_tool, ["prefs", "--slot", "fb2"]))["hint"]:
+            errors.append("反馈冒烟失败：只有两票就给出了偏好结论")
+
+        for _ in range(4):
+            quiet(style_tool, ["feedback", "--slot", "fb", "--kind", "chosen",
+                               "--strategy", "minimal", "--ai", "嗯 我到了"])
+        quiet(style_tool, ["feedback", "--slot", "fb", "--kind", "chosen",
+                           "--strategy", "care", "--ai", "先睡吧"])
+        hint = json.loads(quiet(profile_tool, ["prefs", "--slot", "fb"]))["hint"]
+        if "minimal" not in hint:
+            errors.append("反馈冒烟失败：五票之后没有算出偏好，feedback 仍然是只写不读")
+        # 偏好只排序不准入：修复期的 advance 该拦还是要拦
+        out = json.loads(quiet(profile_tool, [
+            "verify", "--slot", "fb", "--stage", "repairing",
+            "--candidate", "advance:下周末一起出去玩吧"]))
+        if out["candidates"][0]["verdict"] != "fail":
+            errors.append("反馈冒烟失败：偏好把阶段闸门顶掉了（修复期放过了 advance）")
+        if "habit" not in out:
+            errors.append("反馈冒烟失败：verify 没有带出 habit")
+        print("  反馈冒烟：五票出偏好、两票闭嘴、偏好不越闸门")
+    except SystemExit as exc:
+        errors.append(f"反馈冒烟失败：命令退出码 {exc.code}")
+    except Exception as exc:  # pragma: no cover
+        errors.append(f"反馈冒烟失败：{exc}")
+    finally:
+        if old is None:
+            os.environ.pop("LOVE_REPLY_HOME", None)
+        else:
+            os.environ["LOVE_REPLY_HOME"] = old
+
+
 def check_gitignore() -> None:
     p = ROOT / ".gitignore"
     if not p.exists():
@@ -490,6 +563,7 @@ def main() -> int:
     check_style_tool()
     check_profile()
     check_recall()
+    check_feedback_loop()
     check_self_and_gate()
     check_gitignore()
 

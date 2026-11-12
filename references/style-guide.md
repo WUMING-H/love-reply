@@ -182,10 +182,17 @@ python scripts/style_tool.py sample --file 他的发言.txt --slot couple_early
 每次用户点选或手动改，都记下来：
 
 ```bash
-python ~/.workbuddy/skills/love-reply/scripts/feedback.py --slot couple_early \
-  --ai "周六下午我去接你" --user "周六 我过去" --kind edited
+python <skill>/scripts/style_tool.py feedback --slot couple_early --kind chosen \
+  --strategy minimal --ai "周六 我过去"
+
+python <skill>/scripts/style_tool.py feedback --slot couple_early --kind edited \
+  --strategy minimal --ai "周六下午我去接你" --user "周六 我过去"
 ```
 
-`edited` 比 `chosen` 更有价值——改前改后成对出现，是天然的偏好数据。
+`--strategy` 必须填，否则这条记录只能算「发生过一次」，算不出他在哪种策略上更舒服。
+
+`edited` 比 `chosen` 更有价值——改前改后成对出现，是天然的偏好数据，改写后的句子还会进 `samples`。
+
+**这份记录只影响排序。** `profile_tool.py prefs` 统计后给一句提示，`verify` 把它放在 `habit` 字段里；票数不到五票就不出声（三次里两次选 A，可能只是那天只有 A 能用）。它永远不会让一条被阶段禁用的候选通过——偏好是喜好，闸门是边界，两件事。
 
 攒够 30 条同槽位样本后，重跑统计更新 `metrics`，并把 `strategy` 的变化给用户看一眼再覆盖。

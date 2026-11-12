@@ -222,10 +222,22 @@ python scripts/style_tool.py sample --file 他的发言.txt --slot couple_early
 # 校验一条候选是否符合你的风格（按策略分档卡长度）
 python scripts/style_tool.py check --text "下周六开幕" --strategy minimal
 
-# 记录你选中的那条、或你手动改成的样子
+# 记录你选中的那条、或你手动改成的样子（--strategy 必填）
+python scripts/style_tool.py feedback --slot couple_early --kind chosen \
+  --strategy minimal --ai "周六 我过去"
+
 python scripts/style_tool.py feedback --slot couple_early --kind edited \
-  --ai "周六下午我去接你" --user "周六 我过去"
+  --strategy minimal --ai "周六下午我去接你" --user "周六 我过去"
+
+# 看他更常选哪种策略（只影响排序，不影响准入）
+python scripts/profile_tool.py prefs --slot couple_early
 ```
+
+**反馈以前是个死胡同。** 点选记录写进 `feedback.jsonl`，但没有任何代码读它——一个假装在学习的功能，比没有更糟，因为它会让你以为它在变准。
+
+现在接上了：攒够五票，`verify` 的输出里会多一行 `habit`，说他在哪种策略上更舒服；改写率超过四成就提示风格卡可能偏松。票数不到五票时它闭嘴——三次里两次选 A，很可能只是那天只有 A 能用，把噪声当偏好比没有偏好更坏。
+
+**但偏好只排序，不准入。** 攒多少票都不会让一条被阶段禁用的候选通过，否则就会出现「因为你好这口，所以修复期也给你一条邀约」——阶段闸门存在的全部意义就是挡这个。
 
 **最常见的用法是先 `sample`，不是先 `profile`。** 你贴进来的那段对话里本来就有你自己发的话，截图里右侧气泡就是你——不用先攒一百条，把那几条抽出来跑一趟，就有一份可用这次参考。
 
@@ -454,8 +466,8 @@ love-reply/
 │   ├── profile-interview.md     # 十二问：给她的档案
 │   └── self-interview.md        # 十二问：给自己的档案与目标
 ├── scripts/
-│   ├── style_tool.py            # profile / check / feedback / show
-│   ├── profile_tool.py          # 她 / 我 / 目标 / 阶段卡 / 守门 / 批量校验
+│   ├── style_tool.py            # profile / sample / check / feedback / show
+│   ├── profile_tool.py          # 她 / 我 / 目标 / 阶段卡 / 守门 / 批量校验 / 偏好
 │   ├── eval_skill.py            # 评测集：固定场景跑两道闸门
 │   └── validate_skill.py        # 完整性自检（文件、正文关键块、入口一致性）
 ├── evals/

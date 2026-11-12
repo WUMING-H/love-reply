@@ -13,6 +13,7 @@
 守门：
     guard          检查一条候选是否踩到自己的底线、短板、硬目标，以及有没有落进具体细节
     verify         三条候选一次过内容闸门与表达闸门，输出判定表
+    prefs          他对策略的偏好统计（只影响排序，不参与准入）
 
 存储位置：%LOVE_REPLY_HOME%，未设置时用本 Skill 目录下的 data/
     data/profile/{slot}.json   对她的档案 + 关系目标
@@ -26,6 +27,7 @@ import json
 import os
 import re
 import sys
+from collections import Counter
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -1069,6 +1071,59 @@ def _parse_candidate(spec: str) -> dict:
     return {"strategy": "auto", "text": spec.strip()}
 
 
+def habit(slot: str) -> dict:
+    """从点选记录里统计他偏好的策略。
+
+    这份统计只用于**排序**：同样过闸的三条里先给他常用的那种。它永远不能
+    参与准入——「因为你好这口，所以在修复期也给你邀约」正是这套设计要防的事。
+    所以只在票数够多时给一句提示，不给分数、不做加权。
+    """
+    p = home() / "feedback.jsonl"
+    if not p.exists():
+        return {"n": 0, "hint": ""}
+    chosen: Counter = Counter()
+    rejected: Counter = Counter()
+    n = edited = 0
+    for line in p.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if row.get("slot") != slot:
+            continue
+        n += 1
+        strat = (row.get("strategy") or "").strip()
+        if row.get("kind") == "chosen":
+            if strat:
+                chosen[strat] += 1
+        elif row.get("kind") == "rejected":
+            if strat:
+                rejected[strat] += 1
+        elif row.get("kind") == "edited":
+            edited += 1
+    out = {"n": n, "chosen": dict(chosen), "rejected": dict(rejected),
+           "edited": edited, "hint": ""}
+    # 五票以下什么都不说：三次点选里两次选 A，可能是那天只有 A 能用。
+    if n < 5 or sum(chosen.values()) < 3:
+        return out
+    top, cnt = chosen.most_common(1)[0]
+    share = cnt / sum(chosen.values())
+    if share >= 0.5:
+        out["hint"] = f"他以往 {sum(chosen.values())} 次点选里 {cnt} 次是 {top}（{share:.0%}），排序时优先这种；闸门照旧"
+    if n >= 5 and edited / n >= 0.4:
+        out["hint"] = (out["hint"] + "；" if out["hint"] else "") + \
+            f"改写率 {edited / n:.0%}，风格卡可能偏松，建议重新 profile"
+    return out
+
+
+def cmd_prefs(args) -> int:
+    print(json.dumps(habit(args.slot), ensure_ascii=False, indent=2))
+    return 0
+
+
 def cmd_verify(args) -> int:
     """三条候选一次过两道闸门。
 
@@ -1127,6 +1182,9 @@ def cmd_verify(args) -> int:
     if stage:
         out["stage_task"] = stage_card(stage)["task"]
         out["stage_trap"] = stage_card(stage)["trap"]
+    h = habit(args.slot)
+    if h["hint"]:
+        out["habit"] = h["hint"]
     print(json.dumps(out, ensure_ascii=False, indent=2))
     # 只有三条全过才算收工。返回 0 会是「可以输出」的信号，
     # 而三条里挂一条也意味着这组候选还不齐，不能拿它当通过。
@@ -1289,6 +1347,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--file", default="", help='JSON 文件：[{"strategy":"minimal","text":"..."}]')
     p.add_argument("--stage", default="", choices=[""] + list(STAGE))
     p.set_defaults(func=cmd_verify)
+
+    p = sub.add_parser("prefs", help="他对策略的偏好统计（只影响排序）")
+    slot_arg(p)
+    p.set_defaults(func=cmd_prefs)
 
     args = ap.parse_args(argv)
     return args.func(args)
