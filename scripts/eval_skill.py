@@ -72,7 +72,7 @@ def case_context(case: dict) -> tuple[dict, dict]:
 def judge(text: str, strategy: str, case: dict, slot: dict, me: dict) -> dict:
     """跑三道机械检查，返回每一道的结果。"""
     stage = case["stage"]
-    g = profile_tool.guard(text, me, slot, strategy, stage)
+    g = profile_tool.guard(text, me, slot, strategy, stage, case.get("danger"))
     s = style_tool.check(text, None, strategy)
     hits = [t for t in TERMS if t in text]
     denied = strategy in profile_tool.stage_card(stage)["deny"] if strategy else False
@@ -93,6 +93,7 @@ def run(verbose: bool = False) -> int:
     failures: list[str] = []
     seen_stages: set[str] = set()
     seen_strategies: set[str] = set()
+    seen_high_danger = False
 
     print(f"评测集 {len(cases)} 条用例")
     for case in cases:
@@ -102,6 +103,12 @@ def run(verbose: bool = False) -> int:
             failures.append(f"{cid}: 阶段「{stage}」不在六档里")
             continue
         seen_stages.add(stage)
+        danger = case.get("danger")
+        if danger is not None:
+            if not isinstance(danger, int) or not 0 <= danger <= 9:
+                failures.append(f"{cid}: danger 必须是 0-9 的整数，拿到的是 {danger!r}")
+            elif danger >= 7:
+                seen_high_danger = True
         slot, me = case_context(case)
 
         goods = case.get("good", [])
@@ -149,6 +156,9 @@ def run(verbose: bool = False) -> int:
         failures.append(f"评测集没有覆盖这些阶段：{'、'.join(missing_stage)}")
     if missing_strategy:
         failures.append(f"评测集没有覆盖这些策略：{'、'.join(missing_strategy)}")
+    # 安全阈值是唯一涉及人身安全的规则。它曾经一条用例都没有，改坏了也没人知道。
+    if not seen_high_danger:
+        failures.append("没有一条 danger≥7 的用例：高危路径无人看守")
 
     for f in failures:
         print(f"  [失败] {f}")

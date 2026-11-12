@@ -85,6 +85,9 @@ python <skill>/scripts/profile_tool.py verify --slot couple_early \
 改那一条，别换策略重写；全 `fail` 说明这组策略被阶段禁了，回头改组合。`notes` 里
 「没接住任何具体事实」在 `substantive` / `advance` / `repair` 三档当问题处理。
 
+`danger ≥ 7` 时带 `--danger 7`，否则邀约和给方案拦不住。`next` 说没跑阶段闸门（槽位拼错、
+档案里阶段拼错、还没建档），或 `group_problems` 非空（策略重复、三条合计超 120 字），都不许发。
+
 连败两次用未改写版本（宁可不像，不要为像而失真）。不通过就重写，不要向用户解释过程。
 
 ### 辅助：写回

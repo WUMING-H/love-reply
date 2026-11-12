@@ -294,10 +294,16 @@ python scripts/profile_tool.py verify --slot couple_early \
   --candidate 'minimal:那先歇会儿' \
   --candidate 'substantive:下班给你带那家潮汕牛肉锅 你几点走' \
   --candidate 'care:听着就累 早点躺下'
+
+# 危险度判到 7 以上时必须带上，否则邀约和给方案拦不住
+python scripts/profile_tool.py verify --slot couple_early --danger 7 \
+  --candidate 'hold:不用回 我就在这'
 ```
 
 `brief` 的前三行是阶段卡（允许 / 禁止 / 字数上限 / 细节密度 / 这一阶段的坑），后面才是她。
 `verify` 每条给 `verdict` 和 `problems`：`pass` 就能发，`fail` 按 `problems` 改那一条。
+
+它还会拦住三种「每条都过、这一组仍不能发」的情况：三条策略重复、合计超过 120 字预算、以及**阶段闸门根本没跑**（槽位拼错、档案里阶段拼错、用户还没建档）。最后这种情况会输出 `"stage_gate": "skipped"` 和 `next: 阶段闸门没跑…`，退出码 2 —— 它以前最危险的行为是不报错，还说「可以直接输出」。
 两步之外没有别的必跑命令——一次回复只走两趟脚本，中间没有可跳过的环节。
 
 **录事实时多写两个字段，否则以后召不回。** 这条是实测出来的：录了「她不吃芒果」，问「想给她买点水果」时一个字都没命中——因为两句中文换个说法就几乎不共字，再好的权重也救不了。
@@ -415,16 +421,16 @@ python scripts/profile_tool.py goal add --slot couple_early   --kind advance --h
 
 改一句指令、松一条闸门，效果是立刻的，损伤是滞后的。等你哪天发现「最近回得不太对」，已经改了三版，不知道该退回到哪一版。
 
-所以有一份固定的评测集：`evals/cases.jsonl`，二十四条场景，覆盖六个阶段和六种策略。每条场景声明三条**应该过**的候选和一到两条**应该被拦**的候选，配一个纯机械断言的 `scripts/eval_skill.py`。
+所以有一份固定的评测集：`evals/cases.jsonl`，二十六条场景，覆盖六个阶段和六种策略，其中两条是 danger≥7 的高危场景。每条场景声明三条**应该过**的候选和一到两条**应该被拦**的候选，配一个纯机械断言的 `scripts/eval_skill.py`。
 
 ```bash
 python scripts/eval_skill.py        # 不联网、不调模型、不需要风格卡
 ```
 
 ```text
-评测集 24 条用例
-  好候选 72 条 · 通过 72 · 被误拦 0
-  坏候选 29 条 · 拦住 29 · 漏放 0
+评测集 26 条用例
+  好候选 78 条 · 通过 78 · 被误拦 0
+  坏候选 31 条 · 拦住 31 · 漏放 0
   覆盖：阶段 6/6 · 策略 6/6
 结果：全部通过
 ```
@@ -506,7 +512,7 @@ love-reply/
 │   ├── blind_test.py            # 盲测：认出率、精确二项检验、作废条件
 │   └── validate_skill.py        # 完整性自检（文件、正文关键块、入口一致性）
 ├── evals/
-│   └── cases.jsonl              # 24 条场景：该过的候选 + 该拦的候选
+│   └── cases.jsonl              # 26 条场景：该过的候选 + 该拦的候选
 ├── documentation/               # 架构、流程、知识库、风格层、阶段、自我层、安全、跨宿主
 ├── licenses/                    # 第三方知识库的 MIT 许可原文
 ├── NOTICE.md                    # 来源与版权归属

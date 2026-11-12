@@ -23,6 +23,7 @@
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import os
 import re
@@ -515,7 +516,7 @@ def stage_block(name: str) -> list[str]:
 
 def cmd_brief(args) -> int:
     """给模型看的注入摘要。必须短——它进的是每次调用的上下文。"""
-    data = load(args.slot)
+    data = load(pick_slot(args.slot))
     person = data.get("person", {})
     head = f"[{person.get('alias', '她')}·{person.get('stage', '未知阶段')}"
     if person.get("since"):
@@ -996,9 +997,19 @@ def anchors_in(text: str, facts: list[dict]) -> list[str]:
 
 
 def guard(text: str, self_data: dict | None, slot_data: dict | None,
-          strategy: str = "", stage: str = "") -> dict:
+          strategy: str = "", stage: str = "", danger: int | None = None) -> dict:
     problems: list[str] = []
     notes: list[str] = []
+
+    # 高风险只允许稳住 / 补救 / 留白。这条以前只写在提示词里，代码一个字都不知道，
+    # 所以「danger 7 还给了一条约会邀约」永远不可能变红。现在它是参数，可被断言。
+    if danger is not None and danger >= 7:
+        if strategy in DANGER_DENY:
+            problems.append(
+                f"[危险 {danger}] 这个程度只允许稳住 / 补救 / 留白，"
+                f"不许玩笑、不许 {strategy}。先让人安全，再谈关系")
+        elif strategy in ("", "auto"):
+            notes.append(f"危险 {danger}：这条按什么策略？没标明就无法确认它是否越线")
 
     sd = self_data or {}
     for item in sd.get("items", []):
@@ -1052,7 +1063,7 @@ def cmd_guard(args) -> int:
     stage = args.stage
     if not stage and slot_data:
         stage = slot_data.get("person", {}).get("stage", "")
-    result = guard(args.text, self_data, slot_data, args.strategy, stage)
+    result = guard(args.text, self_data, slot_data, args.strategy, stage, args.danger)
     if stage:
         card = stage_card(stage)
         result["stage_task"] = card["task"]
@@ -1063,11 +1074,55 @@ def cmd_guard(args) -> int:
 
 STRATEGIES = ("minimal", "care", "substantive", "advance", "repair", "hold")
 
+# danger >= 7 时不许出现的两种：邀约（advance）和给方案（substantive）。
+# 稳住 = minimal / care，补救 = repair，留白 = hold，这三种才是这个阶段该说的。
+DANGER_DENY = ("advance", "substantive")
+
+# 整条回复的预算：判断一句 + 三条候选 + 结尾一句 ≤120 字，这是 SKILL.md 的承诺。
+# 以前它只活在那句话里，没有任何落点；有卡时三档上限相加能到 100 字，
+# 再加判断和结尾必然爆。这里把「留给候选的那部分」定死，才谈得上执行。
+OUTPUT_BUDGET = 120
+OVERHEAD = 50  # 判断句 + 选哪条那句，各按 25 字预留
+CANDIDATE_BUDGET = OUTPUT_BUDGET - OVERHEAD
+
+
+def pick_slot(slot: str) -> str:
+    """只有一个档案时就用它。
+
+    默认槽位是 couple_early，但用户常常只建了一份 warming 档案。以前这种情况报
+    「档案不存在，先跑 init」，模型很可能顺手再建一份空的——「多份档案先问」的
+    噪声就是从这儿来的。读路径上直接收敛到唯一那一份。
+    """
+    if profile_path(slot).exists():
+        return slot
+    d = home() / "profile"
+    names = sorted(p.stem for p in d.glob("*.json")) if d.exists() else []
+    return names[0] if len(names) == 1 else slot
+
 
 def _parse_candidate(spec: str) -> dict:
-    head, sep, tail = spec.partition(":")
-    if sep and head.strip() in STRATEGIES + ("auto",):
-        return {"strategy": head.strip(), "text": tail.strip()}
+    """`策略:文字` → {strategy, text}。
+
+    三种写法都要认，因为三种都会真实发生：
+    - 半角冒号（脚本示例）：`minimal:嗯`
+    - 全角冒号（中文输入法默认）：`minimal：嗯`。以前只 partition(":")，
+      于是「minimal：」整段被当成正文开头，用户复制就走漏出去了。
+    - 策略名拼错：`minmal:嗯`。按相似度归位，别让它继续当正文。
+    """
+    s = spec.replace("：", ":").replace("﹕", ":")
+    head, sep, tail = s.partition(":")
+    head = head.strip()
+    if sep and head in STRATEGIES + ("auto",):
+        return {"strategy": head, "text": tail.strip()}
+    if sep and head:
+        near = difflib.get_close_matches(head, list(STRATEGIES), n=1, cutoff=0.7)
+        if near:
+            return {"strategy": near[0], "text": tail.strip(),
+                    "note": f"策略名「{head}」不认识，按 {near[0]} 校验"}
+        # 长一点的英文前缀多半是想写策略名却没写对。剥掉，别让它跟着候选发出去。
+        if len(head) >= 4 and re.fullmatch(r"[A-Za-z_]+", head):
+            return {"strategy": "auto", "text": tail.strip(),
+                    "note": f"前缀「{head}:」不认识，已剥离，按 auto 校验"}
     return {"strategy": "auto", "text": spec.strip()}
 
 
@@ -1147,48 +1202,87 @@ def cmd_verify(args) -> int:
         return 1
 
     self_data = load_self()
-    slot_data = load(args.slot) if profile_path(args.slot).exists() else None
+    slot = pick_slot(args.slot)
+    slot_data = load(slot) if profile_path(slot).exists() else None
     stage = args.stage or (slot_data or {}).get("person", {}).get("stage", "")
-    card = load_card(args.slot)
+    if stage and stage not in STAGE:
+        stage = ""  # 档案里存了个拼错的值，别拿它当闸门依据
+    card = load_card(slot)
 
     rows = []
     for i, c in enumerate(cands, 1):
         text = (c.get("text") or "").strip()
         strat = c.get("strategy") or "auto"
-        g = guard(text, self_data, slot_data, strat, stage)
+        g = guard(text, self_data, slot_data, strat, stage, args.danger)
         s = style_check(text, card, strat)
         problems = g["problems"] + [f"[表达] {p}" for p in s["problems"]]
+        notes = list(g["notes"])
+        if c.get("note"):
+            notes.insert(0, c["note"])
         rows.append({
             "n": i, "strategy": strat, "text": text, "length": len(text),
             "verdict": "pass" if not problems else "fail",
             "problems": problems,
-            "notes": g["notes"],
+            "notes": notes,
             "anchors": g["anchors"],
             "target_range": s["target_range"],
         })
 
+    # 逐条都过了，这一组仍然可能不合格：三条一个策略、三条加起来爆字数。
+    # 这类问题不属于任何单条候选，必须单列，否则「三 pass」就成了收工信号。
+    group: list[str] = []
+    strats = [r["strategy"] for r in rows]
+    dups = sorted({s for s in strats if strats.count(s) > 1})
+    if len(rows) > 3:
+        group.append(f"{len(rows)} 条候选，输出只要三条，多的删掉")
+    if dups:
+        group.append(f"策略重复：{'、'.join(dups)}。三条要真的不同，换措辞不算换策略")
+    total_chars = sum(r["length"] for r in rows)
+    if total_chars > CANDIDATE_BUDGET:
+        group.append(f"三条合计 {total_chars} 字，加判断句和结尾会超过 {OUTPUT_BUDGET} 字上限"
+                     f"（候选部分只剩 {CANDIDATE_BUDGET} 字），先砍")
+
     passed = [r for r in rows if r["verdict"] == "pass"]
+    if not stage:
+        # 阶段闸门整条没跑。这条以前会输出「可以直接输出」，于是槽位名拼错、
+        # 或者用户还没建档时，唯一能挡邀约的闸门静默消失，而模型读到的是通过。
+        nxt = "阶段闸门没跑：先用 --stage 指定六档之一，或跑 brief 看档案里写的是哪个。别当它过了闸"
+        code = 2
+    elif len(passed) != len(rows):
+        nxt = ("没过的按 problems 改，别换策略重写" if passed else
+               "一条都没过：先看策略是不是被这一阶段禁了，别硬改文字")
+        code = 2
+    elif group:
+        nxt = "三条都过闸了，但这组还不合格：" + "；".join(group)
+        code = 2
+    else:
+        nxt = "可以直接输出"
+        code = 0
+
     out = {
         "stage": stage or None,
+        "stage_gate": "ran" if stage else "skipped",
+        "slot": slot,
+        "danger": args.danger,
         "has_style_card": card is not None,
         "candidates": rows,
+        "group_problems": group,
+        "total_chars": total_chars,
+        "candidate_budget": CANDIDATE_BUDGET,
         "summary": {
             "pass": len(passed), "fail": len(rows) - len(passed),
-            "next": ("可以直接输出" if len(passed) == len(rows) else
-                     "没过的按 problems 改，别换策略重写" if passed else
-                     "一条都没过：先看策略是不是被这一阶段禁了，别硬改文字"),
+            "next": nxt,
         },
     }
     if stage:
         out["stage_task"] = stage_card(stage)["task"]
         out["stage_trap"] = stage_card(stage)["trap"]
-    h = habit(args.slot)
+    h = habit(slot)
     if h["hint"]:
         out["habit"] = h["hint"]
     print(json.dumps(out, ensure_ascii=False, indent=2))
-    # 只有三条全过才算收工。返回 0 会是「可以输出」的信号，
-    # 而三条里挂一条也意味着这组候选还不齐，不能拿它当通过。
-    return 0 if len(passed) == len(rows) else 2
+    # 只有三条全过、成组也合格、且阶段闸门真的跑过，才算收工。
+    return code
 
 
 # ---------------------------------------------------------------- CLI
@@ -1203,7 +1297,9 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("init", help="建立档案")
     slot_arg(p)
     p.add_argument("--alias", default="她")
-    p.add_argument("--stage", default="warming")
+    # 其余命令都做了 choices，只有 init 没有：拼错的阶段能一路写进档案，
+    # brief 之后才提示「未知阶段」，脏值已经在那儿了。
+    p.add_argument("--stage", default="warming", choices=list(STAGE))
     p.add_argument("--since", default="")
     p.add_argument("--force", action="store_true")
     p.set_defaults(func=cmd_init)
@@ -1338,6 +1434,7 @@ def main(argv: list[str] | None = None) -> int:
     slot_arg(p)
     p.add_argument("--strategy", default="")
     p.add_argument("--stage", default="", choices=[""] + list(STAGE))
+    p.add_argument("--danger", type=int, default=None, choices=range(0, 10))
     p.set_defaults(func=cmd_guard)
 
     p = sub.add_parser("verify", help="三条候选一次过两道闸门")
@@ -1346,6 +1443,8 @@ def main(argv: list[str] | None = None) -> int:
                    help="策略:文字，可重复。策略可省")
     p.add_argument("--file", default="", help='JSON 文件：[{"strategy":"minimal","text":"..."}]')
     p.add_argument("--stage", default="", choices=[""] + list(STAGE))
+    p.add_argument("--danger", type=int, default=None, choices=range(0, 10),
+                   help="判出来的危险度 0-9。≥7 时邀约和给方案一律拦下")
     p.set_defaults(func=cmd_verify)
 
     p = sub.add_parser("prefs", help="他对策略的偏好统计（只影响排序）")

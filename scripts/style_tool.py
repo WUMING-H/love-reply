@@ -190,9 +190,13 @@ def check(text: str, card: dict | None, strategy_name: str = "auto") -> dict:
             hi = max(int(p90 * 1.6), int(p50 * 2.2), 24)
         lo = min(6, max(2, int(p50 * 0.4)))
 
-    if length > hi:
+    if length == 0:
+        # 空串不是「短」，是没有东西可发。以前这里被 `length > 0` 的守卫放过去了，
+        # 于是模型某条生成失败变成空串时，闸门照样盖章「可以输出」。
+        problems.append("空候选：一个字都没有，删掉这条，不要输出空行")
+    elif length > hi:
         problems.append(f"太长：{length} 字，{strategy_name} 档目标 ≤{hi}。先砍，别解释")
-    elif length < lo and length > 0:
+    elif length < lo:
         problems.append(f"太短：{length} 字，目标 ≥{lo}，可能丢了信息")
 
     if text.rstrip().endswith("。") and (m.get("terminal_period", 0) or 0) < 0.15:

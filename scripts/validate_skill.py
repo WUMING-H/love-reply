@@ -601,6 +601,117 @@ def check_blind_test() -> None:
         errors.append(f"盲测冒烟失败：{exc}")
 
 
+def check_verify_hardening() -> None:
+    """闸门自己的洞：这几条以前都是「正文承诺、脚本不查」。
+
+    共同点是改坏了也不报错，只会安静放过一条本该死的话。所以每条都要有断言：
+    空候选、没有阶段、三条同策略、全角冒号、danger≥7、120 字预算。
+    """
+    import contextlib
+    import io
+    import tempfile
+
+    tmp = tempfile.mkdtemp(prefix="love-reply-hd-")
+    old = os.environ.get("LOVE_REPLY_HOME")
+    os.environ["LOVE_REPLY_HOME"] = tmp
+    sys.path.insert(0, str(ROOT / "scripts"))
+    try:
+        import profile_tool
+        import style_tool
+
+        def run_raw(argv) -> tuple[int, str]:
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(io.StringIO()):
+                try:
+                    code = profile_tool.main(argv)
+                except SystemExit as exc:  # argparse 的 choices 拒绝
+                    code = exc.code if isinstance(exc.code, int) else 1
+            return code, buf.getvalue()
+
+        def run(argv) -> tuple[int, dict]:
+            code, text = run_raw(argv)
+            return code, json.loads(text)
+
+        if style_tool.check("", None, "minimal")["ok"]:
+            errors.append("闸门漏洞：空候选被判通过（模型某条生成失败会直接发出去）")
+
+        if profile_tool.guard("周末出来散散心吧", {}, None, "advance", "couple_early", 7)["ok"]:
+            errors.append("闸门漏洞：danger≥7 时邀约照样通过")
+        if profile_tool.guard("我们坐下来把问题一条条理清楚", {}, None,
+                              "substantive", "couple_early", 7)["ok"]:
+            errors.append("闸门漏洞：danger≥7 时「给方案」照样通过（只拦了邀约）")
+        if not profile_tool.guard("我在 你说", {}, None, "care", "couple_early", 7)["ok"]:
+            errors.append("闸门漏洞：danger≥7 时把「稳住」也拦了，人就没话可说")
+
+        c = profile_tool._parse_candidate("minimal：嗯 我知道了")
+        if c["strategy"] != "minimal" or "minimal" in c["text"]:
+            errors.append(f"闸门漏洞：全角冒号没归位，候选里带着前缀（{c}）")
+        if profile_tool._parse_candidate("minmal:嗯")["strategy"] != "minimal":
+            errors.append("闸门漏洞：拼错的策略名没有归位")
+
+        # 没有阶段时，最危险的结果不是报错，是输出「可以直接输出」
+        code, out = run(["verify", "--slot", "nosuch", "--candidate", "minimal:嗯 我知道了"])
+        if code != 2 or out["stage_gate"] != "skipped" or "可以直接输出" in out["summary"]["next"]:
+            errors.append("闸门漏洞：没有阶段时仍然宣称可以直接输出（阶段闸门静默消失）")
+
+        code, out = run(["verify", "--stage", "couple_early",
+                         "--candidate", "minimal:嗯 我知道了",
+                         "--candidate", "minimal:好的 明白了",
+                         "--candidate", "minimal:行 收到"])
+        if code != 2 or not out["group_problems"]:
+            errors.append("闸门漏洞：三条同一策略仍然算通过（正文要求策略必须不同）")
+
+        code, out = run(["verify", "--stage", "couple_early",
+                         "--candidate", "minimal:嗯 我在 你说 别急 慢慢来 不用赶时间",
+                         "--candidate", "substantive:下周六下午两点我到楼下接你 顺便把上次那本书带给你 不用你跑一趟",
+                         "--candidate", "advance:那明天下午我带杯咖啡过去找你 方便的话"])
+        if not any("120" in p for p in out["group_problems"]):
+            errors.append(f"闸门漏洞：三条合计 {out['total_chars']} 字超过 120 预算却没提示")
+
+        # 档案是明文 JSON，README 明说可以直接改。改出一个拼错的阶段时，
+        # 不能拿它当闸门依据，也不能悄悄退化成「没有闸门」还说通过。
+        run_raw(["init", "--slot", "bad", "--stage", "warming"])
+        bad = Path(tmp) / "profile" / "bad.json"
+        data = json.loads(bad.read_text(encoding="utf-8"))
+        data["person"]["stage"] = "coup_early"
+        bad.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        code, text = run_raw(["verify", "--slot", "bad", "--candidate", "minimal:嗯 我知道了"])
+        try:
+            out = json.loads(text)
+        except json.JSONDecodeError:
+            out = None
+        if out is None:
+            errors.append("闸门漏洞：档案里拼错的阶段让 verify 崩了，连判定表都没出")
+        elif out["stage_gate"] != "skipped" or code != 2:
+            errors.append("闸门漏洞：档案里拼错的阶段被当成了闸门依据")
+
+        # 只有一份档案时，默认槽位不该把人挡在「档案不存在」外面。
+        # 单独开一个 home：上面那份 bad.json 会让「唯一的档案」变成坏阶段的，
+        # 断言的就不是回退了。
+        solo = tempfile.mkdtemp(prefix="love-reply-solo-")
+        os.environ["LOVE_REPLY_HOME"] = solo
+        run_raw(["init", "--slot", "warming", "--stage", "warming"])
+        code, text = run_raw(["brief", "--query", "她说今天好累"])
+        if code != 0 or "档案不存在" in text:
+            errors.append("读路径没有收敛到唯一那份档案：只有一个 warming 档案时 brief 仍然报不存在")
+        os.environ["LOVE_REPLY_HOME"] = tmp
+
+        code, _ = run_raw(["init", "--slot", "zz", "--stage", "coup_early"])
+        if code == 0:
+            errors.append("init 接受了拼错的阶段名（其余命令都做了 choices）")
+
+        print("  闸门硬化：空候选拦、无阶段降级、策略去重、冒号归一、危险阈值、字数预算、单档案回退")
+    except SystemExit as exc:
+        errors.append(f"闸门硬化冒烟失败：命令退出码 {exc.code}")
+    except Exception as exc:  # pragma: no cover
+        errors.append(f"闸门硬化冒烟失败：{exc}")
+    finally:
+        if old is None:
+            os.environ.pop("LOVE_REPLY_HOME", None)
+        else:
+            os.environ["LOVE_REPLY_HOME"] = old
+
+
 def check_gitignore() -> None:
     p = ROOT / ".gitignore"
     if not p.exists():
@@ -627,6 +738,7 @@ def main() -> int:
     check_recall()
     check_feedback_loop()
     check_blind_test()
+    check_verify_hardening()
     check_self_and_gate()
     check_gitignore()
 

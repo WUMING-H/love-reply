@@ -212,16 +212,16 @@ When goal and stage conflict, stage wins. The correct output is not to abandon t
 
 Change one instruction, loosen one gate: the effect is immediate, the damage is delayed. By the time "replies feel off lately" reaches you, three versions have shipped and you no longer know which one to roll back to.
 
-So there is a fixed suite: `evals/cases.jsonl`, twenty-four scenes covering all six stages and all six strategies. Each scene declares three candidates that **must pass** and one or two that **must be blocked**, checked by `scripts/eval_skill.py` with mechanical assertions only.
+So there is a fixed suite: `evals/cases.jsonl`, twenty-six scenes covering all six stages and all six strategies, two of them at danger≥7. Each scene declares three candidates that **must pass** and one or two that **must be blocked**, checked by `scripts/eval_skill.py` with mechanical assertions only.
 
 ```bash
 python scripts/eval_skill.py        # offline, no model calls, no style card needed
 ```
 
 ```text
-24 cases
-  good candidates 72 · passed 72 · wrongly blocked 0
-  bad candidates  29 · blocked 29 · let through 0
+26 cases
+  good candidates 78 · passed 78 · wrongly blocked 0
+  bad candidates  31 · blocked 31 · let through 0
   coverage: stages 6/6 · strategies 6/6
 result: all passed
 ```

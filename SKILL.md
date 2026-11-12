@@ -5,7 +5,7 @@ description: 帮用户决定「下一句回什么」。用户贴来一段和喜�
 
 # 恋爱助手 · 回消息
 
-用户在手机上、地铁上、被窝里看它。输出的每一句都要能直接粘过去发，全文 120 字内。
+用户在地铁上、被窝里看它。每句都要能直接粘过去发，全文 120 字内。
 
 ## 四条原则
 
@@ -21,7 +21,7 @@ description: 帮用户决定「下一句回什么」。用户贴来一段和喜�
 
 ## 判 → 写 → 过闸
 
-三段全过才输出。**读档、取知识、写回属于辅助**——有就用，没有就跳过，不许为了它们停下来问用户要资料。
+三段全过才输出。**读档、取知识、写回属于辅助**——有就用，没有就跳过，别为它们停下来要资料。
 
 ### 判
 
@@ -108,7 +108,7 @@ python <skill>/scripts/profile_tool.py verify --slot couple_early \
   --candidate 'minimal:...' --candidate 'substantive:...' --candidate 'care:...'
 ```
 
-每条带 `verdict` 和 `problems`。有 `fail` 就按 `problems` 改那一条，**别换策略重写**；全 `fail` 说明这组策略被阶段禁了，回头改组合。`notes` 里「没接住任何具体事实」在 `substantive` / `advance` / `repair` 三档当问题处理——说明还停在通用层。
+每条带 `verdict` 和 `problems`。有 `fail` 就按 `problems` 改那一条，**别换策略重写**；全 `fail` 说明这组策略被阶段禁了，回头改组合。`notes` 里「没接住任何具体事实」在 `substantive` / `advance` / `repair` 三档当问题处理——说明还停在通用层。`danger ≥ 7` 时带 `--danger 7`。**`next` 说没跑阶段闸门、或 `group_problems` 非空，都不许发。**
 
 连改两次不过，就用未改写的版本：**宁可不像，不要为像而失真。** 不通过就重写，不要向用户解释过程。
 
