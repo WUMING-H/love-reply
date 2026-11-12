@@ -88,6 +88,18 @@ python <skill>/scripts/profile_tool.py verify --slot couple_early \
 `danger ≥ 7` 时带 `--danger 7`，否则邀约和给方案拦不住。`next` 说没跑阶段闸门（槽位拼错、
 档案里阶段拼错、还没建档），或 `group_problems` 非空（策略重复、三条合计超 120 字），都不许发。
 
+### 续写
+
+她已经回了一句时，这一轮**只给一句**，不再摆三条：
+
+```bash
+python <skill>/scripts/profile_tool.py verify --slot couple_early \
+  --then "<她回的那句>" --prev "advance:<上一轮真发出去的那条>" --candidate 'minimal:...'
+```
+
+`signal` 判她的进退（`withdraw` / `cold` / `engaged` / `unclear`）。三种错会被拦：她在收还邀约、
+连着推两次、把上一句换个说法又说一遍。`branch` 说明这轮之后怎么接——照它停手，第二句等她。
+
 连败两次用未改写版本（宁可不像，不要为像而失真）。不通过就重写，不要向用户解释过程。
 
 ### 辅助：写回
@@ -122,6 +134,14 @@ python <skill>/scripts/style_tool.py feedback --slot couple_early --kind chosen 
 3. 下周六 我过去接你 中午先吃饭
 
 选 2。别问「你怎么了」，她不想解释。
+```
+
+第二轮（有 `--then`）只出两行：判断一句 + 一条编号的话，**不加「选 X」**——本来就是一句。
+
+```
+她那句是在收，不是在等你安排。别再提前天的事。
+
+1. 行 你先忙
 ```
 
 - 第一行判断，一句话，说人话

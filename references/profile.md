@@ -176,6 +176,40 @@ python scripts/profile_tool.py forget --slot couple_early --ids r3
 
 ---
 
+## 7.5 写回与点选：什么时候问，问什么
+
+只在出现下面四类内容时问一句，**一次对话最多问一次**。用户说「记」就 `add`，说「不用」就当没发生，不要追问理由。
+
+| 出现了什么 | 记成 |
+|---|---|
+| 她明确说过的事实（生日、忌口、班表、家人） | `fact` |
+| 你答应了她的事 | `promise` |
+| 她明确表达过的雷区或有效安抚方式 | `landmine` / `soother` |
+| 你自己暴露的短板、底线，或说出的方向 | `self add --kind flaw/limit`、`goal add` |
+
+录事实时补两样，否则以后召不回：**`--tag` 写类别词**（`她不吃芒果` → `--tag 芒果 水果 过敏`），**`--core` 标「说了就必须遵守」的**（忌口、过敏、生日）。他提问是转述、档案存的是原话，两句话换种说法就一个字都不共，只靠字面匹配等于没录。
+
+**他说的话比她的信息更值钱**——一个定方向，一个只定细节。他主动纠正你的时候（「不是这样，她其实是……」）那是最有价值的输入：先按他的说法改候选，再问要不要把这条写进档案。没新信息就什么都不做，每次结尾弹一句「要不要记录」比不记更烦。
+
+### 点选记录
+
+他选了哪条、或改成了什么，记一行——这是风格层唯一的反馈信号：
+
+```bash
+python <skill>/scripts/style_tool.py feedback --slot couple_early --kind chosen --strategy minimal --ai "<他选的那条>"
+python <skill>/scripts/style_tool.py feedback --slot couple_early --kind edited --strategy minimal --ai "<你给的>" --user "<他改成的>"
+```
+
+攒够五票后 `verify` 会多一行 `habit`；改写率过高会提示风格卡偏松。**它只影响排序，不改闸门**——偏好再明显，阶段禁用的策略也不能出现，否则就成了「因为你好这口，所以修复期也给你一条邀约」。
+
+### 数据往哪放
+
+`<skill>/data/` 下：`style/{slot}.json` 风格卡 · `profile/{slot}.json` 对她的档案与目标 · `self.json` 自我档案 · `feedback.jsonl` 偏好记录。可用 `LOVE_REPLY_HOME` 改到别处。**数据和 skill 文件分开**，升级不会碰到档案；经目录联接挂载时写真实路径那一份。
+
+`data/profile/` 有多份时，先问「这次是哪一个」，不要自己挑一个默默往下走。
+
+---
+
 ## 8 隐私
 
 - 全部存在本地 `data/profile/{slot}.json`，明文 JSON，可以直接打开看、直接改。

@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import sys
 from pathlib import Path
 
@@ -714,6 +715,106 @@ def check_verify_hardening() -> None:
             os.environ["LOVE_REPLY_HOME"] = old
 
 
+def check_round_two() -> None:
+    """续写：她回了一句之后的那一轮。
+
+    这一轮最容易犯的错不是写得不好，是把它当成第一轮重来一次——再摆三条让她挑、
+    把上一句换个说法又说一遍、她已经往回收了还在往前推。三种错都不会报错，
+    只会显得没在听。
+    """
+    import contextlib
+    import io
+    import tempfile
+
+    tmp = tempfile.mkdtemp(prefix="love-reply-r2-")
+    old = os.environ.get("LOVE_REPLY_HOME")
+    os.environ["LOVE_REPLY_HOME"] = tmp
+    sys.path.insert(0, str(ROOT / "scripts"))
+    try:
+        import profile_tool
+
+        def run_raw(argv) -> tuple[int, str]:
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(io.StringIO()):
+                try:
+                    code = profile_tool.main(argv)
+                except SystemExit as exc:
+                    code = exc.code if isinstance(exc.code, int) else 1
+            return code, buf.getvalue()
+
+        def run(argv) -> tuple[int, dict]:
+            code, text = run_raw(argv)
+            return code, json.loads(text)
+
+        # 进退判错的方向要偏保守：把「你忙吧」当成邀约去追，比少说一句贵得多。
+        for text, want in (("那你忙吧", "withdraw"), ("睡了 明天再说", "withdraw"),
+                           ("嗯", "cold"), ("哦哦", "cold"), ("好的", "cold"),
+                           ("好呀 那周六几点", "engaged"), ("我最近工作上一堆事 累" + "得不行", "engaged")):
+            got = profile_tool.read_signal(text)[0]
+            if got != want:
+                errors.append(f"进退判错：「{text}」应为 {want}，实际 {got}")
+        # 「哈哈哈」是在笑，不是敷衍。判成冷会让人对她唯一一次热络反应答得拘谨。
+        if profile_tool.read_signal("哈哈哈")[0] == "cold":
+            errors.append("进退判错：「哈哈哈」被判成敷衍")
+
+        # 上一轮用 minimal：这样只有「她在收还在推」能拦住，不会和「连推」互相兜底。
+        # 两条规则叠在同一个用例上，关掉其中一条测试照样绿——那种断言等于没有。
+        base = ["verify", "--stage", "dating", "--then", "那你忙吧",
+                "--prev", "minimal:行 你先忙"]
+
+        code, out = run(base + ["--candidate", "advance:那周日下午吧"])
+        if out["candidates"][0]["verdict"] != "fail" or code != 2:
+            errors.append("续写漏洞：她已经在收（「你忙」），邀约照样通过")
+        if out["signal"] != "withdraw" or not out["branch"]:
+            errors.append("续写漏洞：没有判出她在收，或没给她收线后该怎么接")
+
+        code, out = run(["verify", "--stage", "dating", "--then", "好呀 那周六几点",
+                         "--prev", "advance:下周六有展 我订两张",
+                         "--candidate", "advance:那我来接你"])
+        if out["candidates"][0]["verdict"] != "fail":
+            errors.append("续写漏洞：连着推两次 advance 照样通过")
+
+        code, out = run(["verify", "--stage", "dating", "--then", "嗯",
+                         "--prev", "care:听着就累 早点躺下",
+                         "--candidate", "care:听着就累 早点睡吧"])
+        if out["candidates"][0]["verdict"] != "fail":
+            errors.append("续写漏洞：把上一句换个说法又说一遍，照样通过")
+
+        # 三条策略各不相同、都不违规，唯一的问题只剩条数。否则「策略重复」
+        # 会替「条数」兜底，关掉条数检查测试也照样绿。
+        code, out = run(["verify", "--stage", "dating", "--then", "好呀 那周六几点",
+                         "--prev", "advance:下周六有展 我订两张",
+                         "--candidate", "minimal:两点", "--candidate", "care:你定吧",
+                         "--candidate", "substantive:两点开始 我提前十分钟到"])
+        if not out["group_problems"]:
+            errors.append("续写漏洞：第二轮还是摆三条，没有拦")
+        elif "续写只给一句" not in " ".join(out["group_problems"]):
+            errors.append("续写漏洞：三条被拦了，但理由不是「第二轮只给一句」")
+
+        code, out = run(["verify", "--stage", "dating", "--then", "好呀 那周六几点",
+                         "--candidate", "minimal:两点 我提前到"])
+        if not out["group_problems"] or code != 2:
+            errors.append("续写漏洞：没给 --prev，查不了重复和连推，却照样放行")
+
+        code, out = run(["verify", "--stage", "dating", "--then", "好呀 那周六几点",
+                         "--prev", "advance:下周六有展 我订两张",
+                         "--candidate", "minimal:两点 我提前到"])
+        if code != 0 or out["round"] != 2 or out["candidates"][0]["verdict"] != "pass":
+            errors.append("续写坏了：一条合格的第二轮回复都过不了闸")
+
+        # 续写不再按三条的预算算，也不该被「三条重复」误伤
+        if out["group_problems"]:
+            errors.append("续写误判：单条续写被当成了「三条重复」")
+
+        print("  续写冒烟：进退三档、收线后不推、连推拦、重复拦、单条约束、正常通过")
+    finally:
+        if old is None:
+            os.environ.pop("LOVE_REPLY_HOME", None)
+        else:
+            os.environ["LOVE_REPLY_HOME"] = old
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def check_kb_routes() -> None:
     """知识路由：43 篇里谁能到达、路径是否真实存在、表和数据是否一致。
 
@@ -814,6 +915,7 @@ def main() -> int:
     check_feedback_loop()
     check_blind_test()
     check_verify_hardening()
+    check_round_two()
     check_kb_routes()
     check_self_and_gate()
     check_gitignore()

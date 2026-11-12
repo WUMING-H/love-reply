@@ -12,7 +12,7 @@
 
 守门：
     guard          检查一条候选是否踩到自己的底线、短板、硬目标，以及有没有落进具体细节
-    verify         三条候选一次过内容闸门与表达闸门，输出判定表
+    verify         三条候选一次过内容闸门与表达闸门；--then 走第二轮（只给一句）
     kb             意图 × 阶段 → 该读的 2–3 篇知识（路由数据的唯一入口）
     prefs          他对策略的偏好统计（只影响排序，不参与准入）
 
@@ -1086,6 +1086,46 @@ OUTPUT_BUDGET = 120
 OVERHEAD = 50  # 判断句 + 选哪条那句，各按 25 字预留
 CANDIDATE_BUDGET = OUTPUT_BUDGET - OVERHEAD
 
+# 续写：对方已经回了一句，这一轮只给一句。
+# 第二轮再摆三条，等于把「挑一条」的成本又推回给用户一次，节奏就断了。
+ROUND_TWO_TEXT_BUDGET = 60
+
+# 从她这一句里判「她是在收、在敷衍、还是接住了」。
+# 词表故意小：判错的代价不对称——把「你忙吧」当邀请去追，比少说一句贵得多。
+WITHDRAW_MARKS = ("你忙", "算了", "没事", "不用", "再说", "先这样", "不聊", "睡了", "晚安了", "拜拜", "改天")
+EMPTY_MARKS = ("哦", "嗯", "好", "行", "随便", "呵呵", "额", "噢", "喔", "好的", "嗯嗯", "行吧", "都可以", "都行")
+# 她开始商量细节，就是接住了。这一档只用来「允许往前走一步」，不靠它放行任何风险。
+ENGAGED_MARKS = ("几点", "哪儿", "哪里", "哪家", "哪个", "怎么", "那周", "好啊", "好呀", "行啊", "可以", "你说")
+
+
+def read_signal(then: str) -> tuple[str, str]:
+    """她这一句是进还是退。返回 (信号, 命中的词)。
+
+    只做三档，不求精确：判成退会少说一句，判成进会多说一句。
+    宁可少说。
+    """
+    t = (then or "").strip()
+    bare = re.sub(r"[\s，。,.!！?？~～…、]+", "", t)
+    for w in WITHDRAW_MARKS:
+        if w in bare:
+            return "withdraw", w
+    # 敷衍必须整句就是那个词，或者同一个字重复（嗯嗯、哦哦）。
+    # 用「包含」会把「好呀 那周六怎么样」判成冷淡——一句话里有「好」不代表在敷衍。
+    if len(bare) <= 4 and (bare in EMPTY_MARKS or (len(set(bare)) == 1 and bare[0] in "哦嗯好行额噢喔")):
+        return "cold", bare
+    # 12 字左右就是一句完整的话了，她在给内容，不是敷衍。
+    if len(bare) >= 12 or re.search(r"[?？]", t) or any(w in bare for w in ENGAGED_MARKS):
+        return "engaged", ""
+    return "unclear", ""
+
+
+def branch_hint(signal: str) -> str:
+    return {
+        "withdraw": "她已经在往回收了：这条只做收尾，别再提这件事、别再问怎么安排。发完停手，隔一天换个轻松话题，等她主动一次。",
+        "cold": "她给得很短：不加码、不追问。这条发完就停，她多给一个字再往下走。",
+        "engaged": "她接住了：可以往前一小步，但只走一步，别把下一步也一起说完。",
+    }.get(signal, "发完就停。她接了才加温一小步；含糊就隔天换话题；明确拒绝就收线。")
+
 
 def pick_slot(slot: str) -> str:
     """只有一个档案时就用它。
@@ -1249,17 +1289,45 @@ def cmd_verify(args) -> int:
             "target_range": s["target_range"],
         })
 
+    group: list[str] = []
+
+    # ---- 续写模式：她回了一句，这一轮只给一句 ----
+    then = (getattr(args, "then", None) or "").strip()
+    signal = hit = ""
+    prev = None
+    if then:
+        signal, hit = read_signal(then)
+        prev = _parse_candidate(args.prev) if getattr(args, "prev", None) else None
+        if len(rows) != 1:
+            group.append(f"续写只给一句：现在是 {len(rows)} 条。她回了话，这一轮不该再让用户重新挑一次")
+        if prev is None:
+            group.append("续写没给 --prev：查不了有没有把上一句又说一遍、有没有连着推两次")
+        for r in rows:
+            if prev:
+                if r["strategy"] == prev["strategy"] and r["strategy"] in ("advance", "substantive"):
+                    r["problems"].append(
+                        f"[续写] 上一轮就是 {prev['strategy']}，她没给新东西，连着推两次只会更像在逼")
+                ratio = difflib.SequenceMatcher(None, r["text"], prev["text"]).ratio()
+                if ratio >= 0.75:
+                    r["problems"].append(f"[续写] 和上一轮那句重合 {ratio:.0%}，等于把话又说了一遍")
+            if signal == "withdraw" and r["strategy"] == "advance":
+                r["problems"].append(f"[续写] 她那句在收（「{hit}」），这时候推进是往枪口上撞")
+            if r["length"] > ROUND_TWO_TEXT_BUDGET:
+                r["problems"].append(
+                    f"[续写] {r['length']} 字，第二轮一句话就够，写长了她更不想接")
+            if r["problems"]:
+                r["verdict"] = "fail"
+
     # 逐条都过了，这一组仍然可能不合格：三条一个策略、三条加起来爆字数。
     # 这类问题不属于任何单条候选，必须单列，否则「三 pass」就成了收工信号。
-    group: list[str] = []
     strats = [r["strategy"] for r in rows]
     dups = sorted({s for s in strats if strats.count(s) > 1})
-    if len(rows) > 3:
+    if not then and len(rows) > 3:
         group.append(f"{len(rows)} 条候选，输出只要三条，多的删掉")
     if dups:
         group.append(f"策略重复：{'、'.join(dups)}。三条要真的不同，换措辞不算换策略")
     total_chars = sum(r["length"] for r in rows)
-    if total_chars > CANDIDATE_BUDGET:
+    if total_chars > CANDIDATE_BUDGET and not then:
         group.append(f"三条合计 {total_chars} 字，加判断句和结尾会超过 {OUTPUT_BUDGET} 字上限"
                      f"（候选部分只剩 {CANDIDATE_BUDGET} 字），先砍")
 
@@ -1270,11 +1338,13 @@ def cmd_verify(args) -> int:
         nxt = "阶段闸门没跑：先用 --stage 指定六档之一，或跑 brief 看档案里写的是哪个。别当它过了闸"
         code = 2
     elif len(passed) != len(rows):
-        nxt = ("没过的按 problems 改，别换策略重写" if passed else
-               "一条都没过：先看策略是不是被这一阶段禁了，别硬改文字")
+        base = ("没过的按 problems 改，别换策略重写" if passed else
+                "一条都没过：先看策略是不是被这一阶段禁了，别硬改文字")
+        # 单条挂了、成组也有问题时要一起说：只修单条，下一轮还会在同一个地方卡住。
+        nxt = base + ("；这组另外还不合格：" + "；".join(group) if group else "")
         code = 2
     elif group:
-        nxt = "三条都过闸了，但这组还不合格：" + "；".join(group)
+        nxt = ("这一条过闸了，但还不能发：" if then else "三条都过闸了，但这组还不合格：") + "；".join(group)
         code = 2
     else:
         nxt = "可以直接输出"
@@ -1295,6 +1365,15 @@ def cmd_verify(args) -> int:
             "next": nxt,
         },
     }
+    if then:
+        out["round"] = 2
+        out["then"] = then
+        out["signal"] = signal
+        if hit:
+            out["signal_hit"] = hit
+        out["prev"] = prev
+        out["branch"] = branch_hint(signal)
+        out["text_budget"] = ROUND_TWO_TEXT_BUDGET
     if stage:
         out["stage_task"] = stage_card(stage)["task"]
         out["stage_trap"] = stage_card(stage)["trap"]
@@ -1466,6 +1545,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--stage", default="", choices=[""] + list(STAGE))
     p.add_argument("--danger", type=int, default=None, choices=range(0, 10),
                    help="判出来的危险度 0-9。≥7 时邀约和给方案一律拦下")
+    p.add_argument("--then", default="", metavar="她回的那句",
+                   help="续写模式：她回了这句话，这一轮只给一句。判进退、查重复与连推")
+    p.add_argument("--prev", default="", metavar="策略:上一轮发出的那句",
+                   help="续写模式必给：上一轮实际发出去的是哪条")
     p.set_defaults(func=cmd_verify)
 
     p = sub.add_parser("kb", help="意图 × 阶段 → 该读的 2–3 篇知识")

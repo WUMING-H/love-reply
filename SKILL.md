@@ -68,16 +68,7 @@ python <skill>/scripts/profile_tool.py brief --slot couple_early --query "<这�
 
 再锁一句：`让对方感到 X，同时我要 Y，不要 Z`。这个 Y 必须来自他的个人目标，不是「让对话变好」。
 
-然后 3 条，**策略必须真的不同**（不是换措辞）：
-
-| 策略 | 样子 |
-|---|---|
-| `minimal` | 最短、最低风险，只解决眼前问题。永远有这条，是退路 |
-| `substantive` | 给足实质：具体时间、具体方案、认的那个具体的错 |
-| `advance` | 推进或落地下一步（`danger ≤ 3` 且阶段允许） |
-| `care` | 只给情绪价值，不给方案 |
-| `repair` | 认错 + 具体补救 |
-| `hold` | 留白：一句短的，或明确建议先别发 |
+然后 3 条，**策略必须真的不同**（不是换措辞）：`minimal` 最短最低风险，永远有这条，是退路 · `substantive` 给足实质 · `advance` 推进下一步 · `care` 只给情绪不给方案 · `repair` 认错加补救 · `hold` 留白。定义与触发条件见 `references/compose.md` ②。
 
 自检：字数相近？风险一样？语气一样？任一为是就重写。
 
@@ -85,19 +76,11 @@ python <skill>/scripts/profile_tool.py brief --slot couple_early --query "<这�
 
 知识：`profile_tool.py kb --intent <意图> --stage <阶段> --danger <n>` 出该读的 2–3 篇，特殊情形加 `--flag`（`--help` 列全）。**一个术语都不许出现在候选里**：把知识全删掉，候选应该一个字不变。
 
-**先取这次的样。** 他贴进来的这段对话里，他自己发的那几条就是最现成的样本——不用先攒语料，也不用先建卡。截图（多模态宿主直接看，右侧气泡是他）或文字都行，把他的话一行一条抽出来：
+**风格：先取这次的样。** 他贴的对话里他自己发的那几条就是现成样本，不用先攒语料。截图（右侧气泡是他）或文字都行，一句话一行抽出来喂给 `style_tool.py sample --file <他的发言.txt>`。`inferred_avoid` 拿到就用；**样本不足 12 条时只信禁用表，别信字数中位数**——她一生气他就全短，量的是这次的状态。
 
-```bash
-python <skill>/scripts/style_tool.py sample --file <他的发言.txt> --slot couple_early
-```
+临场样本只在这次生效，不落盘；要存进卡得他点头（`--save`）。截图里的头像、昵称、手机号、群名一个都不许写进档案。
 
-`inferred_avoid` 拿到就用：不用 emoji、不加句号、不用「呢啦呀」。**样本不足 12 条时只信这份禁用表，别信字数中位数**——她一生气他就全短，量出来的是这次对话的状态，不是他平时的样子。所以小样本卡不接管长度上限，只用它的禁止项。
-
-临场样本只在这次生效，不落盘；要存进风格卡得他点头（`--save`）。截图里的头像、昵称、手机号、群名一个都不许写进档案。
-
-**改风格**（`references/style-guide.md`）—— 把三条改写成「他会打出来的字」。有长期卡就按卡，没有就按这次的样。**语义冻结**：时间、地点、承诺、认的错一个不能丢，把「下周六下午两点」压成「周六见」算失败。
-
-连样本都没有时（他只贴了一句「她说这个怎么回」），走冷启动的安全默认（短、不加句号、无 emoji），**不在当次阻塞**，结尾轻问一句校准，别为了建档停下不给结果。
+**改风格·语义冻结**：时间、地点、承诺、认的错一个不能丢（把「下周六下午两点」压成「周六见」算失败）。连样本都没有时走冷启动的安全默认（短、不加句号、无 emoji），**不当次阻塞**，结尾轻问一句校准。细则见 `references/style-guide.md`。
 
 ### 过闸
 
@@ -112,29 +95,23 @@ python <skill>/scripts/profile_tool.py verify --slot couple_early \
 
 连改两次不过就用未改写的版本：**宁可不像，不要为像而失真。** 不解释过程。
 
-### 辅助：写回与点选
+### 续写：她已经回了一句
 
-只在出现下面四类内容时问一句，**一次对话最多问一次**。用户说「记」就 `add`，说「不用」就当没发生，不要追问理由。
-
-| 出现了什么 | 记成 |
-|---|---|
-| 她明确说过的事实（生日、忌口、班表、家人） | `fact` |
-| 你答应了她的事 | `promise` |
-| 她明确表达过的雷区或有效安抚方式 | `landmine` / `soother` |
-| 你自己暴露的短板、底线，或说出的方向 | `self add --kind flaw/limit`、`goal add` |
-
-录事实时补两样，否则以后召不回：**`--tag` 写类别词**（`她不吃芒果` → `--tag 芒果 水果 过敏`），**`--core` 标「说了就必须遵守」的**（忌口、过敏、生日）。他提问是转述、档案存的是原话，两句话换种说法就一个字都不共，只靠字面匹配等于没录。
-
-**他说的话比她的信息更值钱**——一个定方向，一个只定细节。他主动纠正你的时候（「不是这样，她其实是……」）那是最有价值的输入：先按他的说法改候选，再问要不要把这条写进档案。没新信息就什么都不做，每次结尾弹一句「要不要记录」比不记更烦。
-
-他选了哪条、或改成了什么，记一行——这是风格层唯一的反馈信号：
+第二轮不是重来一次。**只给一句**，别再摆三条让她重新挑：
 
 ```bash
-python <skill>/scripts/style_tool.py feedback --slot couple_early --kind chosen --strategy minimal --ai "<他选的那条>"
-python <skill>/scripts/style_tool.py feedback --slot couple_early --kind edited --strategy minimal --ai "<你给的>" --user "<他改成的>"
+python <skill>/scripts/profile_tool.py verify --slot couple_early \
+  --then "<她回的那句>" --prev "advance:<你上一轮真发出去的那条>" \
+  --candidate 'minimal:...'
 ```
 
-攒够五票后 `verify` 会多一行 `habit`；改写率过高会提示风格卡偏松。**它只影响排序，不改闸门**——偏好再明显，阶段禁用的策略也不能出现，否则就成了「因为你好这口，所以修复期也给你一条邀约」。
+`signal` 是她的进退：`withdraw` 在收 / `cold` 敷衍 / `engaged` 接住 / `unclear`。三种错会被拦：**她在收你还邀约、连着推两次、把上一句换个说法又说一遍**。`branch` 是这轮之后怎么接——照它停手，第二句等她。
+
+### 辅助：写回与点选
+
+只在出现**她的事实 / 你答应的事 / 她的雷区 / 你的短板或方向**时问一句，一次对话最多问一次；他说「不用」就当没发生。录事实补 `--tag`（类别词）和 `--core`（说了就必须遵守的）。**他说的话比她的信息更值钱**，他主动纠正你时先改候选再问要不要记。
+
+他选了哪条就记一行 `style_tool.py feedback --slot <槽位> --kind chosen --strategy minimal --ai "<他选的>"`——这是风格层唯一的反馈信号，攒够五票 `verify` 多一行 `habit`，**只影响排序，不改闸门**。问题清单与数据目录见 `references/profile.md` 7.5。
 
 ## 输出格式
 
@@ -148,6 +125,14 @@ python <skill>/scripts/style_tool.py feedback --slot couple_early --kind edited 
 3. 下周六我过去接你 你挑晚饭
 
 选 2。别问「你怎么了」，她不想解释。
+```
+
+第二轮（有 `--then`）只出两行——判断一句 + 一条编号的话，**不加「选 X」**，本来就是一句：
+
+```
+她那句是在收，不是在等你安排。别再提前天的事。
+
+1. 行 你先忙
 ```
 
 规则：
@@ -183,10 +168,8 @@ python <skill>/scripts/style_tool.py feedback --slot couple_early --kind edited 
 
 **脚本报错或环境不对**：按 `references/stages.md` 的六阶段表人工核对，照样能出结果。**不要假装跑过。**
 
-## 数据
+## 数据与细则
 
-`<skill>/data/` 下：`style/{slot}.json` 风格卡 · `profile/{slot}.json` 对她的档案与目标 · `self.json` 自我档案 · `feedback.jsonl` 偏好记录。可用 `LOVE_REPLY_HOME` 改到别处。**数据和 skill 文件分开**，升级不会碰到你的档案；经目录联接挂载时写真实路径那一份。
+`<skill>/data/` 存风格卡、档案、反馈日志，可用 `LOVE_REPLY_HOME` 改到别处；**和 skill 文件分开**，升级不碰档案。`data/profile/` 有多份时，先问「这次是哪一个」，不要自己挑一个。
 
-`data/profile/` 有多份时，先问「这次是哪一个」，不要自己挑一个默默往下走。
-
-细则在 `references/`（`judge` 判据 / `compose` 写法 / `style-guide` 风格 / `profile` 她 / `self` 我与目标 / `stages` 阶段），设计背景在 `documentation/`。
+细则在 `references/`（`judge` 判据 / `compose` 写法 / `style-guide` 风格 / `profile` 她与我 / `stages` 阶段 / `routes` 知识路由），设计背景在 `documentation/`。

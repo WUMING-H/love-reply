@@ -52,6 +52,18 @@ jobs:
           python scripts/profile_tool.py kb --intent vent --stage couple_early --danger 5
           python scripts/profile_tool.py kb --intent casual --flag 危机
 
+      - name: Round two (she replied)
+        run: |
+          # Actions 的 bash 带 -e，退出码 2 会让这步直接失败，所以先关掉
+          set +e
+          python scripts/profile_tool.py verify --stage dating --then "那你忙吧" \
+            --prev "minimal:行 你先忙" --candidate "advance:那周日下午吧" > /tmp/r2.json
+          code=$?
+          set -e
+          echo "收线后邀约：exit=$code（期望 2）"
+          [ "$code" -eq 2 ] || { echo "::error::她已经在收，邀约没被拦下"; exit 1; }
+          grep -q '"signal": "withdraw"' /tmp/r2.json
+
       - name: Evaluation suite
         run: python scripts/eval_skill.py
 

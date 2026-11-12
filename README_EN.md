@@ -132,6 +132,30 @@ Three phrasings cover everything:
 
 Output is deliberately short: under 120 characters of commentary, judgment on the first line, three unquoted numbered options, then which one to send and what not to do. No JSON, no tables, no psychology jargon — those live inside the engine, not in front of someone reading on the subway.
 
+### She replied. Now what.
+
+This is where the difference shows. Round one gives you three options to pick from. **Once you send one and she answers, round two gives you exactly one line.**
+
+```bash
+python scripts/profile_tool.py verify --slot couple_early \
+  --then "那你忙吧" --prev "advance:下周六有展 我订两张" \
+  --candidate "minimal:行 你先忙"
+```
+
+It first reads whether she is opening or closing:
+
+| Signal | Her line | What this round may do |
+|---|---|---|
+| `withdraw` | 你忙吧 / 算了 / 再说吧 / 改天 / 睡了 | Close out. No invitation, no scheduling |
+| `cold` | 哦 / 嗯 / 好 / 随便 | Don't escalate, don't ask again. Send and stop |
+| `engaged` | asks for a time, adds something new, asks back | One small step forward, exactly one |
+
+Then it blocks the three mistakes that cost the most: **pushing after she has started closing, pushing the same thing twice in a row, and restating your last line in different words** (「听着就累 早点躺下」→「听着就累 早点睡吧」). None of these error out. They just make her feel unheard.
+
+The `branch` field says how to handle what comes next. Usually it is one sentence: **send it and stop.** What moves a conversation forward is her next line, not an extra line from you.
+
+Why not three options in round two? Offering three again hands the choosing cost right back, and the question at that point is no longer "which of my lines" — it is "how do I meet this one." Break the rhythm once and the rest unravels.
+
 ## Style card
 
 Without a card you get "how a normal person would reply". With one you get "how you would reply".
