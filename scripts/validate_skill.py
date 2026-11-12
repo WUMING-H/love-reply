@@ -417,6 +417,55 @@ def check_self_and_gate() -> None:
             os.environ["LOVE_REPLY_HOME"] = old
 
 
+def check_recall() -> None:
+    """召回冒烟：换个说法也要命中 tag，常驻事实不靠检索。
+
+    这两条是对着真实失效写的：录入「她不吃芒果」，问「想给她买点水果」召回 0 条，
+    因为两条中文句子一个字都不共。事实录了等于没录。
+    """
+    import contextlib
+    import io
+    import tempfile
+
+    tmp = tempfile.mkdtemp(prefix="love-reply-recall-")
+    old = os.environ.get("LOVE_REPLY_HOME")
+    os.environ["LOVE_REPLY_HOME"] = tmp
+    sys.path.insert(0, str(ROOT / "scripts"))
+    try:
+        import profile_tool
+        with contextlib.redirect_stdout(io.StringIO()):
+            profile_tool.main(["init", "--slot", "rc", "--stage", "couple_early"])
+            profile_tool.main(["add", "--slot", "rc", "--kind", "fact",
+                               "--text", "她不吃芒果", "--tag", "芒果", "水果", "过敏",
+                               "--core"])
+            profile_tool.main(["add", "--slot", "rc", "--kind", "fact",
+                               "--text", "她周三有夜班 十点才下", "--tag", "下班", "班表"])
+
+        def brief(query: str) -> str:
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                profile_tool.main(["brief", "--slot", "rc", "--query", query])
+            return buf.getvalue()
+
+        if "芒果" not in brief("想给她买点水果"):
+            errors.append("召回冒烟失败：换说法提问召不回打了 tag 的事实")
+        if "夜班" not in brief("她今天几点下班"):
+            errors.append("召回冒烟失败：tag 原样出现在提问里也没有命中")
+        # 无关的问题不该把「夜班」也拖进来，否则等于没做检索
+        if "夜班" in brief("想给她买点水果"):
+            errors.append("召回冒烟失败：无关事实被错误带出（检索变成了全量注入）")
+        print("  召回冒烟：tag 换说法命中、无关事实不入、常驻事实恒带")
+    except SystemExit as exc:
+        errors.append(f"召回冒烟失败：命令退出码 {exc.code}")
+    except Exception as exc:  # pragma: no cover
+        errors.append(f"召回冒烟失败：{exc}")
+    finally:
+        if old is None:
+            os.environ.pop("LOVE_REPLY_HOME", None)
+        else:
+            os.environ["LOVE_REPLY_HOME"] = old
+
+
 def check_gitignore() -> None:
     p = ROOT / ".gitignore"
     if not p.exists():
@@ -440,6 +489,7 @@ def main() -> int:
     check_kb()
     check_style_tool()
     check_profile()
+    check_recall()
     check_self_and_gate()
     check_gitignore()
 

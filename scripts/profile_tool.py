@@ -51,7 +51,7 @@ CONFIDENCE = ("high", "mid", "low")
 
 BRIEF_MAX_CHARS = 380
 BRIEF_ITEM_CHARS = 34
-BRIEF_MAX_ITEMS = 6
+BRIEF_MAX_ITEMS = 8
 
 # 合并后的总预算。自我段单独封顶，避免「我」把「她」挤出去。
 BRIEF_TOTAL_CHARS = 520
@@ -264,23 +264,47 @@ def dice(a: set[str], b: set[str]) -> float:
 MIN_SCORE = 0.15
 
 
-def score_entry(query: str, text: str, tag: str, weight: float) -> float:
+def item_tags(item: dict) -> list[str]:
+    """兼容两种写法：老数据的 `tag` 字符串，新数据的 `tags` 列表。"""
+    t = item.get("tags")
+    if isinstance(t, list):
+        return [x for x in t if x]
+    if isinstance(t, str) and t:
+        return [t]
+    old = item.get("tag")
+    return [old] if isinstance(old, str) and old else []
+
+
+def score_entry(query: str, text: str, tags: list[str], weight: float) -> float:
     """字级相似度为主、双字词为辅。
 
     纯双字重叠会把「她说今天好累」和「她说生日」判成相关，因为共享「她说」。
     字级 Dice 对实词更敏感，也天然惩罚长度不匹配。
+
+    tag 和正文一起参与匹配：用户提问是转述，档案存的是原话，两条中文句子
+    只要换了说法就几乎不共字。「想给她买点水果」和「她不吃芒果」共享 0 个字，
+    再怎么调权重也召不回。tag 是唯一能在不上向量检索的前提下补这个缺口的
+    东西——它由录入的人自己写，可解释、可修改。
     """
     q = content_chars(query)
-    e = content_chars(text + " " + (tag or ""))
+    joined = text + " " + " ".join(tags)
+    e = content_chars(joined)
     if not q or not e:
         return 0.0
+    # 标签原样出现在提问里，是比字面重合更强的信号：「想给她买点水果」和
+    # 「她不吃芒果」一个字都不共，但如果录入时标了「水果」，就该命中。
+    # 要求标签至少两个字——「吃」「班」这种单字标签挂上去等于没有标签。
+    tag_hit = any(len(t) >= 2 and t in query for t in tags)
     # 只共享一个字通常是巧合（「她说今天好累」和「她说生日」只共享「她说」），
     # 宁可不给，也不要往上下文里塞噪音。
-    if len(q & e) < 2 and len(q) > 1:
+    if not tag_hit and len(q & e) < 2 and len(q) > 1:
         return 0.0
     char_sim = dice(q, e)
-    gram_sim = dice(bigrams(query), bigrams(text + " " + (tag or "")))
-    return round((0.65 * char_sim + 0.35 * gram_sim) * weight, 4)
+    gram_sim = dice(bigrams(query), bigrams(joined))
+    score = (0.65 * char_sim + 0.35 * gram_sim) * weight
+    if tag_hit:
+        score = max(score, 0.55 * weight)
+    return round(score, 4)
 
 
 def entries(data: dict) -> list[tuple[str, dict, str]]:
@@ -289,11 +313,11 @@ def entries(data: dict) -> list[tuple[str, dict, str]]:
     for item in data.get("facts", []):
         out.append(("fact", item, item["text"]))
     for item in data.get("reads", []):
-        out.append(("read", item, f"{item.get('tag', '')} {item['text']}"))
+        out.append(("read", item, f"{' '.join(item_tags(item))} {item['text']}"))
     for item in data.get("landmines", []):
-        out.append(("landmine", item, item["text"]))
+        out.append(("landmine", item, f"{' '.join(item_tags(item))} {item['text']}"))
     for item in data.get("soothers", []):
-        out.append(("soother", item, item["text"]))
+        out.append(("soother", item, f"{' '.join(item_tags(item))} {item['text']}"))
     for item in data.get("promises", []):
         if item.get("status", "open") == "open":
             out.append(("promise", item, item["text"]))
@@ -307,7 +331,7 @@ def entries(data: dict) -> list[tuple[str, dict, str]]:
 def search(data: dict, query: str, limit: int = 6) -> list[tuple[float, str, dict, str]]:
     scored = []
     for kind, item, text in entries(data):
-        s = score_entry(query, text, item.get("tag", ""), WEIGHT.get(kind, 1.0))
+        s = score_entry(query, text, item_tags(item), WEIGHT.get(kind, 1.0))
         if s >= MIN_SCORE:
             scored.append((round(s, 3), kind, item, text))
     scored.sort(key=lambda x: -x[0])
@@ -349,18 +373,22 @@ def cmd_add(args) -> int:
 
     warnings: list[str] = []
     item = {"id": next_id(data, kind), "text": text, "added": today().isoformat()}
+    tags = [t.strip() for t in (getattr(args, "tag", None) or []) if t and t.strip()]
+    if tags:
+        item["tags"] = tags
 
     if kind == "fact":
         item["source"] = args.source or "未标注"
         item["date"] = args.date or ""
+        if getattr(args, "core", False):
+            item["core"] = True
         data["facts"].append(item)
     elif kind == "read":
         item["confidence"] = args.confidence if args.confidence in CONFIDENCE else "mid"
         item["evidence"] = args.evidence or ""
-        item["tag"] = args.tag or ""
         item["checked"] = today().isoformat()
         same_tag = [r for r in data["reads"]
-                    if item["tag"] and r.get("tag") == item["tag"] and r["text"] != text]
+                    if r["text"] != text and set(tags) & set(item_tags(r))]
         if same_tag:
             warnings.append(
                 "已有同主题认知：" + "；".join(r["text"][:24] for r in same_tag[:2])
@@ -501,18 +529,26 @@ def cmd_brief(args) -> int:
         seen.add(item.get("id"))
         picked.append((kind, item, text))
 
-    # 1 与当前对话相关的
+    # 1 常驻事实：忌口、生日这类「说了就必须遵守」的，不靠检索撞。
+    #   检索是概率，遵守是义务，两者不能共用一条通道。
+    for item in data.get("facts", []):
+        if item.get("core"):
+            push("fact", item, item["text"])
+
+    # 2 与当前对话相关的
+    hit = 0
     if args.query:
         for _, kind, item, text in search(data, args.query, BRIEF_MAX_ITEMS):
             # 检索文本里混了 tag，展示用原文
             push(kind, item, item.get("text") or item.get("event") or text)
+            hit += 1
 
-    # 2 全局必带：雷区、有效的安抚方式
+    # 3 全局必带：雷区、有效的安抚方式
     for kind, key in (("landmine", "landmines"), ("soother", "soothers")):
         for item in data.get(key, [])[:2]:
             push(kind, item, item["text"])
 
-    # 3 未兑现且临近/逾期的承诺
+    # 4 未兑现且临近/逾期的承诺
     for item in sorted(data.get("promises", []), key=lambda x: x.get("due") or "9999"):
         if item.get("status", "open") != "open":
             continue
@@ -520,16 +556,25 @@ def cmd_brief(args) -> int:
         if not due or due <= (today() + timedelta(days=14)).isoformat():
             push("promise", item, item["text"])
 
-    # 4 兜底：什么都没命中时，带最近的事实和认知，总比空手好
-    if not picked:
+    # 5 兜底：检索一条都没命中时，带最近的事实。
+    #   原来的条件是「什么都没挑到」，但雷区是必带的，永远挑得到 1 条，
+    #   所以这个兜底从来没执行过——查询越不着边际，带的信息反而越少。
+    if hit == 0:
+        extra = 0
         for item in reversed(data.get("facts", [])):
+            if extra >= 2:
+                break
+            before = len(picked)
             push("fact", item, item["text"])
-            if len(picked) >= 3:
-                break
+            if len(picked) > before:
+                extra += 1
         for item in reversed(data.get("reads", [])):
-            push("read", item, item["text"])
-            if len(picked) >= 5:
+            if extra >= 3:
                 break
+            before = len(picked)
+            push("read", item, item["text"])
+            if len(picked) > before:
+                extra += 1
 
     # 「我」这一段先算出来：它既进摘要，也决定空档案时要不还是要输出
     sd = load_self()
@@ -665,6 +710,10 @@ def cmd_export(args) -> int:
 
     def fmt_fact(it: dict) -> str:
         bits = []
+        if it.get("core"):
+            bits.append("常驻")
+        if it.get("tags"):
+            bits.append("标签：" + "/".join(it["tags"]))
         if it.get("source"):
             bits.append(f"来源：{it['source']}")
         if it.get("date"):
@@ -1109,7 +1158,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--date", default="")
     p.add_argument("--confidence", default="mid", choices=CONFIDENCE)
     p.add_argument("--evidence", default="")
-    p.add_argument("--tag", default="")
+    p.add_argument("--tag", nargs="*", default=[],
+                   help="同义词/类别词，检索时和正文一起匹配。如：芒果 水果 吃")
+    p.add_argument("--core", action="store_true",
+                   help="常驻：每次都带上，不靠检索。只给「说了就必须遵守」的事实")
     p.add_argument("--due", default="")
     p.set_defaults(func=cmd_add)
 

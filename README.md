@@ -267,6 +267,9 @@ python scripts/profile_tool.py init --slot couple_early --alias 她 --stage coup
 python scripts/profile_tool.py add --slot couple_early --kind landmine \
   --text "她说累的时候别讲道理"
 
+python scripts/profile_tool.py add --slot couple_early --kind fact \
+  --text "她不吃芒果" --tag 芒果 水果 过敏 --core
+
 python scripts/profile_tool.py add --slot couple_early --kind read \
   --text "她不喜欢被安排，替她做决定会被当成不尊重" \
   --confidence high --evidence "两次提议都被她说我自己来" --tag 边界
@@ -284,6 +287,12 @@ python scripts/profile_tool.py verify --slot couple_early \
 `brief` 的前三行是阶段卡（允许 / 禁止 / 字数上限 / 细节密度 / 这一阶段的坑），后面才是她。
 `verify` 每条给 `verdict` 和 `problems`：`pass` 就能发，`fail` 按 `problems` 改那一条。
 两步之外没有别的必跑命令——一次回复只走两趟脚本，中间没有可跳过的环节。
+
+**录事实时多写两个字段，否则以后召不回。** 这条是实测出来的：录了「她不吃芒果」，问「想给她买点水果」时一个字都没命中——因为两句中文换个说法就几乎不共字，再好的权重也救不了。
+
+所以 `--tag` 用来写类别词（`芒果 水果 过敏`），检索时 tag 和正文一起匹配；`--core` 标那些「说了就必须遵守」的（忌口、过敏、生日），它们不走检索，每次都带上。**检索是概率，遵守是义务**，这两类东西不该混在一个机制里。
+
+不用向量检索的理由很朴素：tag 由录入的人自己写，可解释、可修改、出错了能改对；嵌入模型做同一件事，你既看不懂它为什么召回，也没法改。
 
 **认知与事实必须分开，这是整套设计的核心。** 把推断写成事实之后就再也不会被质疑了——档案里写着「她不喜欢被安排」，半年后你还在按这句话行动，而它可能来自一次误会。
 
