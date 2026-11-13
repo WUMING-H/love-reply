@@ -31,6 +31,7 @@ REQUIRED = [
     "references/persona-isfp-cancer.md",
     "references/stages.md",
     "references/routes.md",
+    "references/trace.md",
     "prompts/standalone.md",
     "prompts/profile-interview.md",
     "prompts/self-interview.md",
@@ -795,6 +796,71 @@ def check_persona() -> None:
     print("  画像拦截：硬拦质问催表态、软提示泛夸讲道理、无误伤、标签不泄漏、无档案带画像")
 
 
+def check_trace() -> None:
+    """可观测性：把「判→取→写→过闸」串成决策记录，校验自不自洽。
+
+    模型每一步都做了决定，但散在一次次调用里，出了错只能猜。trace 把它们
+    收成一段 JSON，再对照已建好的规则查自洽——阶段越级、danger 阈值、
+    取错篇目、过闸报 pass 却自相矛盾，这里一眼能看出来。
+    """
+    import contextlib
+    import io
+
+    sys.path.insert(0, str(ROOT / "scripts"))
+    try:
+        import profile_tool
+    except Exception as exc:  # pragma: no cover
+        errors.append(f"trace 无法导入：{exc}")
+        return
+
+    def run(payload: str) -> dict:
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = profile_tool.main(["trace", "--json", payload])
+        out = json.loads(buf.getvalue())
+        out["_code"] = code
+        return out
+
+    # 正确的决策记录：couple_early + vent + care/repair，取的篇目能路由出来
+    good = run('{"stage":"couple_early","intent":"vent","danger":3,'
+               '"strategies":["care","repair"],'
+               '"kb_files":["references/kb/practical/为他人提供情绪价值：温暖且有效的回应指南.md",'
+               '"references/kb/knowledge/03-依恋理论与情绪调节.md"],'
+               '"verify":{"verdict":"pass"}}')
+    if not good["ok"] or good["_code"] != 0:
+        errors.append(f"trace 误判了正确决策：{good.get('problems')}")
+
+    # danger≥7 却给 advance，必须拦
+    hi = run('{"stage":"couple_early","intent":"vent","danger":8,'
+             '"strategies":["advance"],"kb_files":[],"verify":{"verdict":"pass"}}')
+    if hi["ok"] or not any("danger=8" in p for p in hi["problems"]):
+        errors.append("trace 没拦 danger≥7 却给 advance")
+
+    # 阶段拼错，必须拦
+    bad_stage = run('{"stage":"warmingg","intent":"casual","strategies":["care"],"kb_files":[]}')
+    if bad_stage["ok"] or not any("六档" in p for p in bad_stage["problems"]):
+        errors.append("trace 没拦拼错的阶段")
+
+    # repairing 阶段给 advance，必须拦（阶段闸门）
+    deny = run('{"stage":"repairing","intent":"vent","danger":2,'
+               '"strategies":["advance"],"kb_files":[]}')
+    if deny["ok"] or not any("repairing" in p for p in deny["problems"]):
+        errors.append("trace 没拦 repairing 阶段给 advance")
+
+    # 取错篇目，必须拦
+    stray = run('{"stage":"couple_early","intent":"vent","danger":3,'
+                '"strategies":["care"],'
+                '"kb_files":["references/kb/knowledge/07-沟通冲突与修复.md"]}')
+    if stray["ok"] or not any("路由不出来" in p for p in stray["problems"]):
+        errors.append("trace 没拦取错的篇目")
+
+    # verify 报 pass 却自相矛盾，必须点破
+    if hi["ok"]:
+        errors.append("trace 没点破「verify 报 pass 但决策自相矛盾」")
+
+    print("  trace 决策记录：阶段越级、danger 阈值、取错篇目、pass 自相矛盾都能查出来")
+
+
 def check_round_two() -> None:
     """续写：她回了一句之后的那一轮。
 
@@ -1030,6 +1096,7 @@ def main() -> int:
     check_blind_test()
     check_verify_hardening()
     check_persona()
+    check_trace()
     check_round_two()
     check_kb_routes()
     check_practical_tone()
