@@ -64,7 +64,7 @@ python <skill>/scripts/profile_tool.py brief --slot couple_early --query "<这�
 
 档案没有也能往下走，别为了补档案停下来问。规则见 `references/profile.md`（她）、`references/self.md`（我与目标）。
 
-**没建档时也有默认画像兜底**（`references/persona-isfp-cancer.md`）：吃软不吃硬、慢热要安全感、泛夸没用要具体。它只调「怎么说」，**不用它下判断、不改 danger、不朗读「ISFP/巨蟹」**；档案里写了具体的雷区就优先。
+**没建档时也有默认画像兜底**（`references/persona.md`）：吃软不吃硬、慢热要安全感、泛夸没用要具体。它只调「怎么说」，**不用它下判断、不改 danger、不朗读人格标签**；档案里写了具体的雷区就优先。
 
 ### 写
 

@@ -28,7 +28,7 @@ REQUIRED = [
     "references/style-guide.md",
     "references/profile.md",
     "references/self.md",
-    "references/persona-isfp-cancer.md",
+    "references/persona.md",
     "references/stages.md",
     "references/routes.md",
     "references/trace.md",
@@ -730,7 +730,7 @@ def check_verify_hardening() -> None:
 
 
 def check_persona() -> None:
-    """默认画像（ISFP + 巨蟹）的措辞拦截。
+    """默认画像的措辞拦截。
 
     只拦「怎么说」，不判断「她怎么想」、不改 danger。硬拦质问/催表态，
     软提示泛夸/讲道理。关键断言：硬拦要拦得住、软提示不误伤日常、人格标签不泄漏。
@@ -765,10 +765,10 @@ def check_persona() -> None:
             errors.append(f"画像误伤：{good!r} 被当成了对抗/催表态")
 
     # 人格标签一个字都不许出现在 problems/notes 里——画像只影响「怎么说」，
-    # 不朗读「ISFP」「巨蟹」，也不替她下判断。
+    # 不朗读人格标签，也不替她下判断。
     for txt in ("你什么意思", "你对我真好"):
         joined = " ".join(problems(txt) + notes(txt))
-        if "ISFP" in joined or "巨蟹" in joined:
+        if any(w in joined for w in ("人格", "星座", "测评")):
             errors.append(f"画像把人格标签泄漏进输出了：{joined}")
 
     # 无档案时 brief 要带画像要点。

@@ -516,7 +516,7 @@ def stage_block(name: str) -> list[str]:
 
 
 def persona_block() -> list[str]:
-    """默认画像（ISFP + 巨蟹）的三行浓缩。
+    """默认画像的三行浓缩。
 
     这是「默认先验」，不是档案里的具体事实——它只给沟通方向，不给判断依据。
     档案里一旦写了具体的 landmine / soother，那些优先；这里只在没有档案时兜底。
@@ -1074,9 +1074,9 @@ def guard(text: str, self_data: dict | None, slot_data: dict | None,
     if not anchors and strategy in ("substantive", "advance", "repair"):
         notes.append("没接住任何具体事实。这一档候选最好落到她知道的具体东西上")
 
-    # 默认画像（ISFP + 巨蟹）的措辞拦截。只影响「怎么说」，不影响 danger。
+    # 默认画像的措辞拦截。只影响「怎么说」，不影响 danger。
     # 硬拦：质问反问、催表态——几乎总是错，踩「吃软不吃硬」这条稳定的雷。
-    # 软提示：泛夸、讲道理压情绪——偶尔可用，只是对 ISFP 不是最优。
+    # 软提示：泛夸、讲道理压情绪——偶尔可用，只是对她不是最优。
     if persona:
         for pat, label in PERSONA_HARD:
             if pat.search(text):
@@ -1113,10 +1113,10 @@ STRATEGIES = ("minimal", "care", "substantive", "advance", "repair", "hold")
 # 稳住 = minimal / care，补救 = repair，留白 = hold，这三种才是这个阶段该说的。
 DANGER_DENY = ("advance", "substantive")
 
-# 默认画像（ISFP + 巨蟹）的措辞拦截。只拦「怎么说」，不判断「她怎么想」，
+# 默认画像的措辞拦截。只拦「怎么说」，不判断「她怎么想」，
 # 不改变 danger 打分。默认先验只做这一件事：吃软不吃硬、慢热别催、
 # 泛夸没用要具体、先复述再回应。有真实档案时，档案里的 landmine 优先于这里。
-# 详见 references/persona-isfp-cancer.md。
+# 详见 references/persona.md。
 #
 # 分两层，用正则而非子串词表——中文变体太多（「你真好」「你对我真好」
 # 「你对我可真好」），穷举词表会漏。
@@ -1129,7 +1129,7 @@ PERSONA_HARD = [
     (re.compile(r"(到底是分还是合|要不要在一起)"), "催表态"),
 ]
 PERSONA_SOFT = [
-    # 泛夸：ISFP 觉得是套路，要具体不要抽象。「你对我可真好」这种叠修饰也要认。
+    # 泛夸：她觉得很套路，要具体不要抽象。「你对我可真好」这种叠修饰也要认。
     (re.compile(r"你(对我)?(可|真|实在|太)+(好|棒|厉害|重要|温柔|善解人意)"), "泛夸无具体"),
     (re.compile(r"你是(最好|最棒|最特别|最重要)的"), "泛夸无具体"),
     # 讲道理压情绪：她情绪起来时，讲道理等于否定她的感受
