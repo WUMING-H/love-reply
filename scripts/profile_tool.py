@@ -1297,6 +1297,97 @@ def cmd_kb(args) -> int:
     return 0
 
 
+def cmd_trace(args) -> int:
+    """把「判→取→写→过闸」串成一段决策记录，再做一致性校验。
+
+    模型产出候选时，每一步都做了决定：判了什么阶段/意图/danger、取了哪几篇
+    知识、写了什么策略的候选、过闸拦了什么。这些决定散在一次次调用里，
+    平时没人汇总，出了问题只能猜。trace 把它们收成一段 JSON，再对照
+    已经建好的规则检查自不自洽——判错、越级、取错篇、误给危险策略，这里
+    一眼能看出来。它不调模型，是事后可追溯的确定性校验。
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import kb_route
+
+    if args.file:
+        rec = json.loads(Path(args.file).read_text(encoding="utf-8"))
+    else:
+        raw = getattr(args, "json", "") or ""
+        if not raw:
+            print(json.dumps({"ok": False, "error": "用 --file 给一段决策记录 JSON"}, ensure_ascii=False))
+            return 1
+        rec = json.loads(raw)
+
+    problems: list[str] = []
+    info: list[str] = []
+
+    stage = (rec.get("stage") or "").strip()
+    intent = (rec.get("intent") or "").strip()
+    danger = rec.get("danger")
+    strategies = rec.get("strategies") or []
+    kb_files = rec.get("kb_files") or []
+    verify = rec.get("verify") or {}
+
+    # 1 阶段必须合法，否则整条闸门都没跑
+    if stage:
+        if stage not in STAGE:
+            problems.append(f"阶段「{stage}」不是六档之一：{'、'.join(STAGE)}")
+        else:
+            c = STAGE[stage]
+            allow = set(c["allow"])
+            conditional = set(c.get("conditional", []))
+            deny = set(c.get("deny", []))
+            for s in strategies:
+                if s in deny:
+                    problems.append(f"阶段 {stage} 禁止策略 {s}（{c['task']}）")
+                elif s in conditional and s not in allow:
+                    info.append(f"阶段 {stage} 里 {s} 是条件策略，需要前置，别当无条件可用")
+    else:
+        problems.append("没判阶段：阶段闸门整条没跑，别当它过了闸")
+
+    # 2 danger ≥ 7 时不许推进/给方案
+    if danger is not None and danger >= 7:
+        for s in strategies:
+            if s in DANGER_DENY:
+                problems.append(f"danger={danger} 却给了 {s}，这时候只该稳住（minimal/care）或补救（repair）")
+
+    # 3 取的篇目必须真能被「意图×阶段×danger」路由出来，否则是取错了
+    if intent:
+        try:
+            routed = kb_route.route(intent, stage, danger)
+            expected = set(routed["files"])
+            got = {f for f in kb_files if f}
+            if got:
+                stray = got - expected
+                if stray:
+                    problems.append("取的篇目路由不出来：" + "、".join(sorted(stray)))
+                if not (got & expected) and expected:
+                    problems.append("取的知识和意图对不上：该读 " + "、".join(sorted(expected)[:2]))
+        except (KeyError, LookupError) as exc:
+            problems.append(f"意图路由失败：{exc}")
+    elif kb_files:
+        info.append("没写 intent，无法核对取的篇目是否该读")
+
+    # 4 verify 的结果如果写了，就该和这里一致；不一致说明过闸和记录对不上
+    vverdict = verify.get("verdict")
+    if vverdict == "pass" and problems:
+        problems.append("verify 报 pass，但决策自相矛盾——上面的问题没查出来，别采信这个 pass")
+
+    ok = not problems
+    out = {
+        "ok": ok,
+        "stage": stage or None,
+        "intent": intent or None,
+        "danger": danger,
+        "strategies": strategies,
+        "problems": problems,
+        "notes": info,
+        "checked": ["阶段闸门", "danger 阈值", "知识路由", "过闸一致性"],
+    }
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    return 0 if ok else 1
+
+
 def cmd_verify(args) -> int:
     """三条候选一次过两道闸门。
 
@@ -1623,6 +1714,11 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("prefs", help="他对策略的偏好统计（只影响排序）")
     slot_arg(p)
     p.set_defaults(func=cmd_prefs)
+
+    p = sub.add_parser("trace", help="把判→取→写→过闸串成决策记录，校验自不自洽")
+    p.add_argument("--file", default="", help="决策记录 JSON 文件")
+    p.add_argument("--json", default="", help="决策记录 JSON 字符串（和 --file 二选一）")
+    p.set_defaults(func=cmd_trace)
 
     args = ap.parse_args(argv)
     return args.func(args)

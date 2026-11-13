@@ -174,4 +174,4 @@ python <skill>/scripts/profile_tool.py verify --slot couple_early \
 
 `<skill>/data/` 存风格卡、档案、反馈日志，可用 `LOVE_REPLY_HOME` 改到别处；**和 skill 文件分开**，升级不碰档案。`data/profile/` 有多份时，先问「这次是哪一个」，不要自己挑一个。
 
-细则在 `references/`（`judge` 判据 / `compose` 写法 / `style-guide` 风格 / `profile` 她与我 / `stages` 阶段 / `routes` 知识路由），设计背景在 `documentation/`。
+细则在 `references/`（`judge` 判据 / `compose` 写法 / `style-guide` 风格 / `profile` 她与我 / `stages` 阶段 / `routes` 知识路由 / `trace` 决策记录），设计背景在 `documentation/`。
