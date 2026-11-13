@@ -530,6 +530,10 @@ python scripts/blind_test.py score --round rounds/r1 --picks "B,A,B,-,A,A,B,A,B,
 
 `lines.jsonl` 不是 `evals/cases.jsonl`：后者喂给闸门，字段是 `good` / `bad`；盲测要 `mine` 和 `generated`。忘了格式就跑 `python scripts/blind_test.py template`。
 
+### 端到端：一次完整输出怎么判
+
+评测集管「闸门没松」，盲测管「像不像你」，但「判断对不对、方向对不对、四条原则有没有**同时**满足」这两份都盖不住——那是语义判断，机械断言判不了。补一份人工清单：一次完整使用后（贴记录 → 三条候选 → 发出去 → 她回），照六项打 0/1，攒十次看趋势。见 `documentation/e2e-checklist.md`。
+
 ## 项目结构
 
 ```text
