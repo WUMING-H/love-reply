@@ -28,6 +28,7 @@ REQUIRED = [
     "references/style-guide.md",
     "references/profile.md",
     "references/self.md",
+    "references/persona-isfp-cancer.md",
     "references/stages.md",
     "references/routes.md",
     "prompts/standalone.md",
@@ -310,7 +311,19 @@ def check_style_tool() -> None:
         "我理解你的感受，建议你先冷静一下，等她想通了自然会来找你。", None, "substantive")
     if bad["ok"]:
         errors.append("冒烟测试失败：AI 味长句未被拦截")
-    print(f"  冒烟测试：正常句通过={good['ok']}，AI 味句拦截={not bad['ok']}")
+
+    # 冷启动安全默认里明写「不用叠字」，无卡时也该拦。这条曾经漏放——
+    # AVOID_PATTERNS 只活在 infer_avoid 生成的 avoid 里，无卡时 strategy={}，
+    # banned 根本没有它，「哈哈哈哈哈」「整整整整」全放行。
+    dup = style_tool.check("我循环了整整整整一年", None, "care")
+    if dup["ok"]:
+        errors.append("冒烟测试失败：无卡时叠字「整整整整」未被拦截（安全默认失效）")
+    # 反过来，「哈哈」两个字是日常说法，无卡时不能误伤。
+    normal_haha = style_tool.check("我也笑了 哈哈", None, "care")
+    if not normal_haha["ok"]:
+        errors.append(f"冒烟测试失败：无卡时日常「哈哈」被误伤 {normal_haha['problems']}")
+    print(f"  冒烟测试：正常句通过={good['ok']}，AI 味句拦截={not bad['ok']}，"
+          f"无卡叠字拦截={not dup['ok']}")
 
 
 def check_profile() -> None:
@@ -715,6 +728,73 @@ def check_verify_hardening() -> None:
             os.environ["LOVE_REPLY_HOME"] = old
 
 
+def check_persona() -> None:
+    """默认画像（ISFP + 巨蟹）的措辞拦截。
+
+    只拦「怎么说」，不判断「她怎么想」、不改 danger。硬拦质问/催表态，
+    软提示泛夸/讲道理。关键断言：硬拦要拦得住、软提示不误伤日常、人格标签不泄漏。
+    """
+    sys.path.insert(0, str(ROOT / "scripts"))
+    try:
+        import profile_tool
+    except Exception as exc:  # pragma: no cover
+        errors.append(f"画像拦截无法导入：{exc}")
+        return
+
+    def problems(text: str, strategy: str = "care", stage: str = "couple_early") -> list[str]:
+        return profile_tool.guard(text, None, None, strategy, stage, None)["problems"]
+
+    def notes(text: str, strategy: str = "care", stage: str = "couple_early") -> list[str]:
+        return profile_tool.guard(text, None, None, strategy, stage, None)["notes"]
+
+    # 硬拦：质问反问、催表态。这些几乎总是错，踩「吃软不吃硬」。
+    for bad in ("你到底想怎样", "别闹了", "你现在就给个准话", "到底是分还是合"):
+        if not problems(bad):
+            errors.append(f"画像硬拦失效：{bad!r} 该被拦却没拦")
+
+    # 软提示：泛夸、讲道理压情绪。不拦（不阻塞），但要给提示。
+    if not notes("你对我真好 还等我"):
+        errors.append("画像软提示失效：「你对我真好」该给泛夸提示却没给")
+    if not notes("你应该冷静一点"):
+        errors.append("画像软提示失效：「你应该冷静」该给讲道理提示却没给")
+
+    # 无误伤：日常真诚的话不能被画像误拦。
+    for good in ("你记得我不吃香菜", "好想见你", "你帮了我大忙", "我想你"):
+        if problems(good):
+            errors.append(f"画像误伤：{good!r} 被当成了对抗/催表态")
+
+    # 人格标签一个字都不许出现在 problems/notes 里——画像只影响「怎么说」，
+    # 不朗读「ISFP」「巨蟹」，也不替她下判断。
+    for txt in ("你什么意思", "你对我真好"):
+        joined = " ".join(problems(txt) + notes(txt))
+        if "ISFP" in joined or "巨蟹" in joined:
+            errors.append(f"画像把人格标签泄漏进输出了：{joined}")
+
+    # 无档案时 brief 要带画像要点。
+    import contextlib
+    import io
+    import tempfile
+    tmp = tempfile.mkdtemp(prefix="love-reply-persona-")
+    old = os.environ.get("LOVE_REPLY_HOME")
+    os.environ["LOVE_REPLY_HOME"] = tmp
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            profile_tool.main(["init", "--slot", "p", "--alias", "她", "--stage", "couple_early"])
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            profile_tool.main(["brief", "--slot", "p", "--query", "她说今天好累"])
+        text = buf.getvalue()
+        if "画像" not in text or "吃软不吃硬" not in text:
+            errors.append("无档案时 brief 没有带出默认画像要点")
+    finally:
+        if old is None:
+            os.environ.pop("LOVE_REPLY_HOME", None)
+        else:
+            os.environ["LOVE_REPLY_HOME"] = old
+
+    print("  画像拦截：硬拦质问催表态、软提示泛夸讲道理、无误伤、标签不泄漏、无档案带画像")
+
+
 def check_round_two() -> None:
     """续写：她回了一句之后的那一轮。
 
@@ -915,6 +995,7 @@ def main() -> int:
     check_feedback_loop()
     check_blind_test()
     check_verify_hardening()
+    check_persona()
     check_round_two()
     check_kb_routes()
     check_self_and_gate()

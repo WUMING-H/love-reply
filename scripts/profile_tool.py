@@ -515,6 +515,20 @@ def stage_block(name: str) -> list[str]:
     ]
 
 
+def persona_block() -> list[str]:
+    """默认画像（ISFP + 巨蟹）的三行浓缩。
+
+    这是「默认先验」，不是档案里的具体事实——它只给沟通方向，不给判断依据。
+    档案里一旦写了具体的 landmine / soother，那些优先；这里只在没有档案时兜底。
+    三行卡着字数：它和阶段卡一样是固定规则，不占「她」的记忆额度。
+    """
+    return [
+        "[画像] 吃软不吃硬：别质问、别反问、别催她当场表态",
+        "[画像] 慢热、要安全感：先接情绪再谈事，先复述她说的再回应",
+        "[画像] 泛夸没用：夸具体动作，别「你真好」；她更吃「你注意到了我」",
+    ]
+
+
 def cmd_brief(args) -> int:
     """给模型看的注入摘要。必须短——它进的是每次调用的上下文。"""
     data = load(pick_slot(args.slot))
@@ -586,6 +600,7 @@ def cmd_brief(args) -> int:
 
     if not picked and not me:
         print("\n".join([head, *stage_block(person.get("stage", "")),
+                         *persona_block(),
                          "（档案里还没有内容，先录入几条事实和雷区）"]))
         return 0
 
@@ -602,6 +617,11 @@ def cmd_brief(args) -> int:
     # 阶段卡不计入个人额度：它是固定大小的规则，不是「她」的记忆。
     # 挤掉一条事实去换一条规则没有意义——规则缺了会直接用错策略。
     lines.extend(stage_block(person.get("stage", "")))
+    # 默认画像也当固定规则带：它是「默认的她」，档案里的具体事实会压过它。
+    # 只在没有真实 landmine（雷区）时带——雷区本身就是「怎么跟她说话」的定制，
+    # 有雷区了还叠画像会互相打架。
+    if not data.get("landmines"):
+        lines.extend(persona_block())
     for kind, item, text in picked:
         line = brief_line(kind, text, item)
         if used + len(line) + 1 > BRIEF_TOTAL_CHARS:
@@ -998,7 +1018,8 @@ def anchors_in(text: str, facts: list[dict]) -> list[str]:
 
 
 def guard(text: str, self_data: dict | None, slot_data: dict | None,
-          strategy: str = "", stage: str = "", danger: int | None = None) -> dict:
+          strategy: str = "", stage: str = "", danger: int | None = None,
+          persona: bool = True) -> dict:
     problems: list[str] = []
     notes: list[str] = []
 
@@ -1053,6 +1074,19 @@ def guard(text: str, self_data: dict | None, slot_data: dict | None,
     if not anchors and strategy in ("substantive", "advance", "repair"):
         notes.append("没接住任何具体事实。这一档候选最好落到她知道的具体东西上")
 
+    # 默认画像（ISFP + 巨蟹）的措辞拦截。只影响「怎么说」，不影响 danger。
+    # 硬拦：质问反问、催表态——几乎总是错，踩「吃软不吃硬」这条稳定的雷。
+    # 软提示：泛夸、讲道理压情绪——偶尔可用，只是对 ISFP 不是最优。
+    if persona:
+        for pat, label in PERSONA_HARD:
+            if pat.search(text):
+                problems.append(f"[画像] {label}——吃软不吃硬，这种话会让她关上")
+                break
+        for pat, label in PERSONA_SOFT:
+            m = pat.search(text)
+            if m:
+                notes.append(f"[画像] {label}（「{m.group(1)}」）——她更吃具体的，不是这种空话")
+
     return {"ok": not problems, "problems": problems, "notes": notes,
             "anchors": anchors,
             "stage": stage or None, "strategy": strategy or None}
@@ -1078,6 +1112,29 @@ STRATEGIES = ("minimal", "care", "substantive", "advance", "repair", "hold")
 # danger >= 7 时不许出现的两种：邀约（advance）和给方案（substantive）。
 # 稳住 = minimal / care，补救 = repair，留白 = hold，这三种才是这个阶段该说的。
 DANGER_DENY = ("advance", "substantive")
+
+# 默认画像（ISFP + 巨蟹）的措辞拦截。只拦「怎么说」，不判断「她怎么想」，
+# 不改变 danger 打分。默认先验只做这一件事：吃软不吃硬、慢热别催、
+# 泛夸没用要具体、先复述再回应。有真实档案时，档案里的 landmine 优先于这里。
+# 详见 references/persona-isfp-cancer.md。
+#
+# 分两层，用正则而非子串词表——中文变体太多（「你真好」「你对我真好」
+# 「你对我可真好」），穷举词表会漏。
+PERSONA_HARD = [
+    # 质问 / 反问：吃软不吃硬，这种话会让她关上
+    (re.compile(r"你(到底|究竟|又|什么意思|烦不烦|闹够了没)"), "质问反问"),
+    (re.compile(r"(随便你吧|别闹了|爱怎样怎样|你爱怎么想怎么想)"), "质问反问"),
+    # 催表态：慢热、回避冲突，逼她当场表态是往枪口上撞
+    (re.compile(r"(给(个|句|我)|要个|现在|今天|到底)[就都]?(给(个|句|我)|必须)?(准话|痛快话|说法|说清楚)"), "催表态"),
+    (re.compile(r"(到底是分还是合|要不要在一起)"), "催表态"),
+]
+PERSONA_SOFT = [
+    # 泛夸：ISFP 觉得是套路，要具体不要抽象。「你对我可真好」这种叠修饰也要认。
+    (re.compile(r"你(对我)?(可|真|实在|太)+(好|棒|厉害|重要|温柔|善解人意)"), "泛夸无具体"),
+    (re.compile(r"你是(最好|最棒|最特别|最重要)的"), "泛夸无具体"),
+    # 讲道理压情绪：她情绪起来时，讲道理等于否定她的感受
+    (re.compile(r"(你应该|你想想|冷静一点|别激动|你要理性)"), "讲道理压情绪"),
+]
 
 # 整条回复的预算：判断一句 + 三条候选 + 结尾一句 ≤120 字，这是 SKILL.md 的承诺。
 # 以前它只活在那句话里，没有任何落点；有卡时三档上限相加能到 100 字，
