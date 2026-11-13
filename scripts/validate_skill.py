@@ -968,6 +968,40 @@ def check_kb_routes() -> None:
           f"仅参考 {report['reference_only']} · 排除 {report['excluded']} · 取路 {checked} 次")
 
 
+def check_practical_tone() -> None:
+    """知识库 practical 系列不许退回「话术库」形态。
+
+    这批篇目最早是从参考材料转译来的，原文是「话术：××× 成品句 + 逻辑：×××
+    解释」的堆砌，带 mindmap 包裹和「AI 生成」标注。模型读到成品句会倾向于
+    照抄，产出一模一样的客套句——直接违反 SKILL.md「像他，不像 AI」的红线。
+    2026-11 把它们全部转译成「原则 + 结构 + 何时用/何时不用」，这里守三件事：
+    不出现 mindmap 包裹、不出现 AI 生成标注、不出现可直接复制的成品句。
+    """
+    import re
+    prac = ROOT / "references" / "kb" / "practical"
+    if not prac.exists():
+        return
+    # 成品句的判定：紧跟在「话术：」或「拒绝话术：」等标签后、且带具体内容。
+    # 「实战话术编排器」的标题里带「话术」但内容是七策略原则，不在这里拦。
+    script_pattern = re.compile(r"(?:话术|拒绝话术|主动话术|替代式拒绝)[：:]")
+    for f in sorted(prac.glob("*.md")):
+        text = f.read_text(encoding="utf-8")
+        name = f.name
+        if "```mindmap" in text:
+            errors.append(f"话术库残留（mindmap 包裹）：{name}")
+        if "由 AI 生成" in text or "AI 生成" in text:
+            errors.append(f"话术库残留（AI 生成标注）：{name}")
+        # 成品句：排除标题行本身（# 开头）里的「话术」，只看正文里的「话术：」
+        for line in text.splitlines():
+            if line.lstrip().startswith("#"):
+                continue
+            if script_pattern.search(line):
+                errors.append(f"话术库残留（成品句「话术：」）：{name}")
+                break
+
+    print(f"  话术库转译：practical 目录已全部转为「原则 + 结构」形态，无成品句/标注残留")
+
+
 def check_gitignore() -> None:
     p = ROOT / ".gitignore"
     if not p.exists():
@@ -998,6 +1032,7 @@ def main() -> int:
     check_persona()
     check_round_two()
     check_kb_routes()
+    check_practical_tone()
     check_self_and_gate()
     check_gitignore()
 
