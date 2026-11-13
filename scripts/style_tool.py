@@ -165,7 +165,13 @@ def infer_avoid(messages: list[str]) -> list[str]:
 def check(text: str, card: dict | None, strategy_name: str = "auto") -> dict:
     m = (card or {}).get("metrics") or SAFE_DEFAULT
     strategy = (card or {}).get("strategy") or {}
-    banned = list(strategy.get("avoid") or []) + AI_SMELL
+    # 「不用叠字」是冷启动安全默认里明写的一条（style-guide.md：短·不加句号·
+    # 不用 emoji·不用「呢/啦/呀」·不用叠字），无卡时也必须生效。「不用波浪号」
+    # 「不用「哈哈」」是从真实语料反推的个性化禁令，没有样本就不知道这个人用不用，
+    # 默认禁止会把日常的「哈哈」误伤，所以仍只走 infer_avoid。
+    banned = list(strategy.get("avoid") or []) + \
+        (["不用叠字"] if not (card or {}).get("strategy", {}).get("avoid") else []) + \
+        AI_SMELL
     problems: list[str] = []
 
     length = len(text)
