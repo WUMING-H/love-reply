@@ -165,7 +165,7 @@ def empty(slot: str) -> dict:
         "person": {"alias": "她", "stage": "warming", "since": "", "basics": {}},
         "facts": [], "reads": [], "unknowns": [],
         "landmines": [], "soothers": [], "promises": [], "timeline": [],
-        "goals": [],
+        "pitfalls": [], "goals": [],
     }
 
 
@@ -529,6 +529,20 @@ def persona_block() -> list[str]:
     ]
 
 
+def pitfall_block(data: dict) -> list[str]:
+    """最近踩过的坑（易错点）的提醒。
+
+    来自 reflect 落档的 trap：模型上一次在这里判断错了，下次别在同一个地方栽跟头。
+    只带最近两条，作为提醒不占「她」的记忆额度；它不是判断依据，不改 danger、
+    不改阶段闸门，只让模型「这次注意」。空档案时没有。
+    """
+    pitfalls = data.get("pitfalls", [])
+    if not pitfalls:
+        return []
+    recent = sorted(pitfalls, key=lambda p: p.get("added", ""), reverse=True)[:2]
+    return [f"[易错] {p['text']}" for p in recent]
+
+
 def cmd_brief(args) -> int:
     """给模型看的注入摘要。必须短——它进的是每次调用的上下文。"""
     data = load(pick_slot(args.slot))
@@ -601,6 +615,7 @@ def cmd_brief(args) -> int:
     if not picked and not me:
         print("\n".join([head, *stage_block(person.get("stage", "")),
                          *persona_block(),
+                         *pitfall_block(data),
                          "（档案里还没有内容，先录入几条事实和雷区）"]))
         return 0
 
@@ -622,6 +637,9 @@ def cmd_brief(args) -> int:
     # 有雷区了还叠画像会互相打架。
     if not data.get("landmines"):
         lines.extend(persona_block())
+    # 易错点提醒：reflect 落档的 trap，让模型下次别在同一个地方栽跟头。
+    # 它不占「她」的记忆额度，和阶段卡、画像一样是固定规则的提醒。
+    lines.extend(pitfall_block(data))
     for kind, item, text in picked:
         line = brief_line(kind, text, item)
         if used + len(line) + 1 > BRIEF_TOTAL_CHARS:
@@ -1480,6 +1498,96 @@ def cmd_balance(args) -> int:
     return 0
 
 
+def cmd_reflect(args) -> int:
+    """复盘回流：把「这次产出好不好」记下来，下次别再犯。
+
+    它补的是 feedback 和 trace 中间断掉的那一环——feedback 记「你最后怎么反应」，
+    trace 记「模型当时怎么判」，但两者的后果都没有回流成「下一次的约束」。
+    reflect 收一段复盘记录，做三件机械的事，不引入新判断：
+
+    1. trap（踩的坑）落成档案里的「易错点」，brief 下次带一句提醒；
+    2. missed_fact（漏掉的事实）提示该补进档案、配什么 tag，不替你自动写；
+    3. edited（你改成的）落成风格样本，和 feedback 的 edited 同一通道，但多记
+       「为什么这么改」（trap），信息更全。
+
+    红线：不给她定罪、不改 danger/阶段闸门/策略白名单、结果不进候选。
+    """
+    raw = getattr(args, "json", "") or ""
+    if args.file:
+        raw = Path(args.file).read_text(encoding="utf-8")
+    if not raw:
+        print(json.dumps({"ok": False, "error": "用 --json 或 --file 给一段复盘记录"},
+                         ensure_ascii=False))
+        return 1
+    try:
+        rec = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        print(json.dumps({"ok": False, "error": f"JSON 解析失败：{exc}"}, ensure_ascii=False))
+        return 1
+
+    slot = pick_slot(rec.get("slot") or args.slot or "couple_early")
+    trap = (rec.get("trap") or "").strip()
+    missed = (rec.get("missed_fact") or "").strip()
+    edited = (rec.get("edited") or "").strip()
+
+    actions: list[str] = []
+    notes: list[str] = []
+
+    # 1 易错点落档：trap 只写「模型哪里判断错了」，不写「她这人怎么这样」。
+    #    同一类坑踩第二次时，brief 会在摘要里带一句提醒。
+    if trap:
+        data = load(slot)
+        pitfalls = data.setdefault("pitfalls", [])
+        # 已有的坑不重复记，只刷新一下，避免同一条堆几十遍。
+        dup = next((p for p in pitfalls if p.get("text") == trap), None)
+        if dup:
+            dup["added"] = today().isoformat()
+            actions.append(f"易错点已存在，刷新日期：{trap}")
+        else:
+            pid = f"x{len(pitfalls) + 1}"
+            pitfalls.append({"id": pid, "text": trap, "added": today().isoformat()})
+            actions.append(f"易错点已落档（{pid}）：{trap}")
+        save(slot, data)
+
+    # 2 漏掉的事实：不自动写（事实要用户确认来源），只提示该怎么补、配什么 tag。
+    if missed:
+        hint = (f"漏掉的事实「{missed}」建议补进档案："
+                f"python scripts/profile_tool.py add --slot {slot} --kind fact "
+                f"--text \"{missed}\" --tag <类别词>")
+        notes.append(hint)
+        actions.append(f"已提示补档：{missed}")
+
+    # 3 你改成的：进风格样本，复用 style_tool 的 samples 通道，多记 trap 作「为什么」。
+    if edited:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from style_tool import load_card, save_card, SAFE_DEFAULT
+        card = load_card(slot) or {"slot": slot, "metrics": SAFE_DEFAULT,
+                                   "strategy": {}, "samples": {}}
+        scene = (rec.get("scene") or "reflect").strip()
+        card.setdefault("samples", {}).setdefault(scene, [])
+        entry = edited if not trap else f"{edited}（{trap}）"
+        if edited not in card["samples"][scene]:
+            card["samples"][scene].append(edited)
+            card["samples"][scene] = card["samples"][scene][-20:]
+            save_card(slot, card)
+            actions.append(f"改写已进样本（{scene}）：{edited}")
+
+    out = {
+        "ok": True,
+        "slot": slot,
+        "actions": actions,
+        "notes": notes,
+        "recorded": {
+            "trap": bool(trap),
+            "missed_fact": bool(missed),
+            "edited": bool(edited),
+        },
+        "红线": "只记「模型哪里判断错了」，不给她定罪；不改 danger/阶段闸门；结果不进候选。",
+    }
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    return 0
+
+
 def cmd_verify(args) -> int:
     """三条候选一次过两道闸门。
 
@@ -1815,6 +1923,12 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("balance", help="投入对账：摆两边客观行为，看是不是单向")
     p.add_argument("--json", default="", help="行为记录 JSON（mine/hers 各四类）")
     p.set_defaults(func=cmd_balance)
+
+    p = sub.add_parser("reflect", help="复盘回流：把这次踩的坑、漏的事实、你的改法记下来，下次别犯")
+    p.add_argument("--json", default="", help="复盘记录 JSON")
+    p.add_argument("--file", default="", help="复盘记录 JSON 文件（和 --json 二选一）")
+    p.add_argument("--slot", default="", help="哪个档案（缺省自动收敛到唯一那份）")
+    p.set_defaults(func=cmd_reflect)
 
     args = ap.parse_args(argv)
     return args.func(args)

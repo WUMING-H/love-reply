@@ -115,6 +115,8 @@ python <skill>/scripts/profile_tool.py verify --slot couple_early \
 
 他选了哪条就记一行 `style_tool.py feedback --slot <槽位> --kind chosen --strategy minimal --ai "<他选的>"`——这是风格层唯一的反馈信号，攒够五票 `verify` 多一行 `habit`，**只影响排序，不改闸门**。问题清单与数据目录见 `references/profile.md` 7.5。
 
+这次踩了坑、漏了她说过的事实、或你改写了候选，跑一次 `profile_tool.py reflect` 把「错在哪」记下来——`brief` 下次会带一句「易错」提醒，别在同一个地方再栽。细则见 `references/reflect.md`。
+
 ## 输出格式
 
 严格照这个结构，不要加标题、不要加分隔线、不要总结：
@@ -174,4 +176,4 @@ python <skill>/scripts/profile_tool.py verify --slot couple_early \
 
 `<skill>/data/` 存风格卡、档案、反馈日志，可用 `LOVE_REPLY_HOME` 改到别处；**和 skill 文件分开**，升级不碰档案。`data/profile/` 有多份时，先问「这次是哪一个」，不要自己挑一个。
 
-细则在 `references/`（`judge` 判据 / `compose` 写法 / `style-guide` 风格 / `profile` 她与我 / `stages` 阶段 / `routes` 知识路由 / `trace` 决策记录 / `balance` 投入对账），设计背景在 `documentation/`。
+细则在 `references/`（`judge` 判据 / `compose` 写法 / `style-guide` 风格 / `profile` 她与我 / `stages` 阶段 / `routes` 知识路由 / `trace` 决策记录 / `balance` 投入对账 / `reflect` 复盘回流），设计背景在 `documentation/`。

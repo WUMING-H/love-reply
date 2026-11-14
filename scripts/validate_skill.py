@@ -33,6 +33,7 @@ REQUIRED = [
     "references/routes.md",
     "references/trace.md",
     "references/balance.md",
+    "references/reflect.md",
     "prompts/standalone.md",
     "prompts/profile-interview.md",
     "prompts/self-interview.md",
@@ -927,6 +928,74 @@ def check_balance() -> None:
     print("  投入对账：三档判对、只摆事实不下结论、定性词零泄漏")
 
 
+def check_reflect() -> None:
+    """复盘回流：把「这次产出好不好」记下来，下次别再犯。
+
+    关键断言：trap 落成易错点、brief 带出提醒、missed_fact 提示补档不自动写、
+    结果不进候选（红线字段在）、不给她定罪。
+    """
+    import io
+    import json
+    import contextlib
+    import tempfile
+
+    tmp = tempfile.mkdtemp(prefix="love-reply-reflect-")
+    old = os.environ.get("LOVE_REPLY_HOME")
+    os.environ["LOVE_REPLY_HOME"] = tmp
+    sys.path.insert(0, str(ROOT / "scripts"))
+    try:
+        import profile_tool
+        with contextlib.redirect_stdout(io.StringIO()):
+            profile_tool.main(["init", "--slot", "rf", "--alias", "她", "--stage", "couple_early"])
+
+        def run(argv) -> dict:
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                code = profile_tool.main(argv)
+            out = json.loads(buf.getvalue())
+            out["_code"] = code
+            return out
+
+        # trap 落成易错点，brief 带出提醒
+        rec = run(["reflect", "--slot", "rf", "--json",
+                   '{"slot":"rf","trap":"把加班当普通累，给了一堆方案",'
+                   '"missed_fact":"她昨天加班到十点","edited":"先别管方案了 你歇会"}'])
+        if not rec.get("ok"):
+            errors.append(f"reflect 报错：{rec.get('error')}")
+        if not any("易错点已落档" in a for a in rec.get("actions", [])):
+            errors.append("reflect 没把 trap 落成易错点")
+        if not any("建议补进档案" in a for a in rec.get("notes", [])):
+            errors.append("reflect 没提示 missed_fact 该补档")
+
+        # brief 要带出易错点提醒
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            profile_tool.main(["brief", "--slot", "rf", "--query", "她说今天好累"])
+        if "[易错]" not in buf.getvalue() or "加班当普通累" not in buf.getvalue():
+            errors.append("reflect 落了易错点，但 brief 没带出提醒")
+
+        # 红线：trap 是「模型判断错了」，不能写成「她这人怎么这样」。
+        # reflect 的落档内容里不许出现定性词。
+        with open(os.path.join(tmp, "profile", "rf.json"), encoding="utf-8") as f:
+            prof = json.load(f)
+        pit = " ".join(p.get("text", "") for p in prof.get("pitfalls", []))
+        for w in ("不成熟", "自私", "耗死", "出局", "分手", "爱不爱"):
+            if w in pit:
+                errors.append(f"reflect 把定性词写进了易错点：{w}")
+
+        print("  复盘回流：trap 落档、brief 带提醒、漏事实提示补档、定性词零进入")
+    except SystemExit as exc:
+        errors.append(f"reflect 冒烟失败：命令退出码 {exc.code}")
+    except Exception as exc:  # pragma: no cover
+        errors.append(f"reflect 冒烟失败：{exc}")
+    finally:
+        if old is None:
+            os.environ.pop("LOVE_REPLY_HOME", None)
+        else:
+            os.environ["LOVE_REPLY_HOME"] = old
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def check_round_two() -> None:
     """续写：她回了一句之后的那一轮。
 
@@ -1164,6 +1233,7 @@ def main() -> int:
     check_persona()
     check_trace()
     check_balance()
+    check_reflect()
     check_round_two()
     check_kb_routes()
     check_practical_tone()
