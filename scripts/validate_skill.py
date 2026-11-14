@@ -32,6 +32,7 @@ REQUIRED = [
     "references/stages.md",
     "references/routes.md",
     "references/trace.md",
+    "references/balance.md",
     "prompts/standalone.md",
     "prompts/profile-interview.md",
     "prompts/self-interview.md",
@@ -758,11 +759,17 @@ def check_persona() -> None:
         errors.append("画像软提示失效：「你对我真好」该给泛夸提示却没给")
     if not notes("你应该冷静一点"):
         errors.append("画像软提示失效：「你应该冷静」该给讲道理提示却没给")
+    # 讨回应/催回复：她遇压力会转移、很少主动，连发追问只会让她消失。
+    if not notes("怎么不回我"):
+        errors.append("画像软提示失效：「怎么不回我」该给讨回应提示却没给")
 
     # 无误伤：日常真诚的话不能被画像误拦。
     for good in ("你记得我不吃香菜", "好想见你", "你帮了我大忙", "我想你"):
         if problems(good):
             errors.append(f"画像误伤：{good!r} 被当成了对抗/催表态")
+    for good in ("你回来了", "想见你"):
+        if notes(good):
+            errors.append(f"画像软提示误伤：{good!r} 被当成了讨回应/泛夸")
 
     # 人格标签一个字都不许出现在 problems/notes 里——画像只影响「怎么说」，
     # 不朗读人格标签，也不替她下判断。
@@ -859,6 +866,65 @@ def check_trace() -> None:
         errors.append("trace 没点破「verify 报 pass 但决策自相矛盾」")
 
     print("  trace 决策记录：阶段越级、danger 阈值、取错篇目、pass 自相矛盾都能查出来")
+
+
+def check_balance() -> None:
+    """投入对账：只摆客观行为，不给她定罪、不下关系判决。
+
+    关键断言：三档判对、只摆事实不出现定性词、缺字段能提示、结果不进候选（红线字段在）。
+    """
+    import io
+    import json
+    import contextlib
+    sys.path.insert(0, str(ROOT / "scripts"))
+    try:
+        import profile_tool
+    except Exception as exc:  # pragma: no cover
+        errors.append(f"balance 无法导入：{exc}")
+        return
+
+    def run(payload: str) -> dict:
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = profile_tool.main(["balance", "--json", payload])
+        try:
+            out = json.loads(buf.getvalue())
+        except json.JSONDecodeError:
+            errors.append(f"balance 输出不是合法 JSON：{buf.getvalue()[:80]}")
+            return {}
+        if code != 0 or not out.get("ok"):
+            errors.append(f"balance 报错：{out.get('error')}")
+        return out
+
+    # 几乎单向：你 6 条投入、她 0 条、还 2 条回避，必须判「几乎单向」
+    oneway = run('{"mine":{"initiate":["找话题","约"],"give":["做PPT","送花","送回家"],'
+                 '"emotion":["接情绪"],"avoid":[]},'
+                 '"hers":{"initiate":[],"give":[],"emotion":[],'
+                 '"avoid":["遇事转移","装死"]}}')
+    if oneway.get("tier") != "几乎单向":
+        errors.append(f"balance 没判出「几乎单向」：{oneway.get('tier')}")
+
+    # 有来有往：两边对等，必须判「有来有往」
+    mutual = run('{"mine":{"initiate":["约"],"give":["送回家"],"emotion":["接情绪"],"avoid":[]},'
+                 '"hers":{"initiate":["找话题"],"give":["分享工资条"],"emotion":["吐槽闺蜜"],"avoid":[]}}')
+    if mutual.get("tier") != "有来有往":
+        errors.append(f"balance 没判出「有来有往」：{mutual.get('tier')}")
+
+    # 中间档：你 3 条、她 2 条，略偏你，判「你多她少」
+    mid = run('{"mine":{"initiate":["约","找话题"],"give":["送回家"],"emotion":["接情绪"],"avoid":[]},'
+              '"hers":{"initiate":["偶尔回"],"give":[],"emotion":["分享一点"],"avoid":["有时不回"]}}')
+    if mid.get("tier") != "你多她少":
+        errors.append(f"balance 没判出「你多她少」：{mid.get('tier')}")
+
+    # 红线：note 和 tier 里不得出现定性词。note 是「实质判断」，绝不能给她定罪；
+    # 「红线」字段是自述「不许说什么」，引用禁用词是必要的，不算泄漏。
+    for out in (oneway, mutual, mid):
+        text = (out.get("tier", "") + " " + out.get("note", ""))
+        for w in ("不成熟", "自私", "耗死", "分手", "出局", "吸", "爱不爱", "该不该分"):
+            if w in text:
+                errors.append(f"balance 把定性词写进了判断里：{w}")
+
+    print("  投入对账：三档判对、只摆事实不下结论、定性词零泄漏")
 
 
 def check_round_two() -> None:
@@ -1097,6 +1163,7 @@ def main() -> int:
     check_verify_hardening()
     check_persona()
     check_trace()
+    check_balance()
     check_round_two()
     check_kb_routes()
     check_practical_tone()

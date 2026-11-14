@@ -1085,7 +1085,7 @@ def guard(text: str, self_data: dict | None, slot_data: dict | None,
         for pat, label in PERSONA_SOFT:
             m = pat.search(text)
             if m:
-                notes.append(f"[画像] {label}（「{m.group(1)}」）——她更吃具体的，不是这种空话")
+                notes.append(f"[画像] {label}（「{m.group(1)}」）——{PERSONA_SOFT_HINT[label]}")
 
     return {"ok": not problems, "problems": problems, "notes": notes,
             "anchors": anchors,
@@ -1134,7 +1134,17 @@ PERSONA_SOFT = [
     (re.compile(r"你是(最好|最棒|最特别|最重要)的"), "泛夸无具体"),
     # 讲道理压情绪：她情绪起来时，讲道理等于否定她的感受
     (re.compile(r"(你应该|你想想|冷静一点|别激动|你要理性)"), "讲道理压情绪"),
+    # 讨回应/催回复：她遇压力会转移、很少主动，连发追问只会让她彻底消失。
+    # 这是软提示不是硬拦——真有事「看到回我一下」偶尔必要，但默认别这么写。
+    (re.compile(r"(怎么不回|是不是生(气|我)|看到回|回复我|为什么不理|你人呢|在不在)"), "讨回应催回复"),
 ]
+
+# 每类软提示各配一句人话，别让「讨回应」挂上「泛夸」的提示语。
+PERSONA_SOFT_HINT = {
+    "泛夸无具体": "她更吃具体的，不是这种空话",
+    "讲道理压情绪": "她情绪起来时，讲道理等于否定她的感受",
+    "讨回应催回复": "她遇压力会转移，追问只会让她消失；给她空间，别要她立刻回应",
+}
 
 # 整条回复的预算：判断一句 + 三条候选 + 结尾一句 ≤120 字，这是 SKILL.md 的承诺。
 # 以前它只活在那句话里，没有任何落点；有卡时三档上限相加能到 100 字，
@@ -1386,6 +1396,88 @@ def cmd_trace(args) -> int:
     }
     print(json.dumps(out, ensure_ascii=False, indent=2))
     return 0 if ok else 1
+
+
+def cmd_balance(args) -> int:
+    """投入对账：只看客观行为，不给她定罪、不给关系下判决。
+
+    这里收的是一段「这段时间谁做了什么」的客观记录，分四类：
+    - 主动发起（谁先找谁、谁先约）
+    - 实际付出（谁做了什么具体的事）
+    - 情绪投入（谁分享、谁回应、谁在意）
+    - 回避/逃避（谁遇事就躲、谁装没看见）
+
+    输出不是「她爱不爱你」或「该不该分」——那些是用户自己的决定，这里不做。
+    它只做一件事：把两边各干了什么**摆在一起**，让单向不平衡自己显出来。
+    结果分「有来有往 / 你多她少 / 几乎单向」三档，每一档都只说事实、给提醒，
+    不下「她不成熟」「这段没戏」这类结论。
+
+    红线：这里的字一个都不进候选。它是给用户自己看的镜子，不是写进回复的素材。
+    """
+    raw = getattr(args, "json", "") or ""
+    if not raw:
+        print(json.dumps({"ok": False, "error": "用 --json 给一段行为记录"}, ensure_ascii=False))
+        return 1
+    try:
+        rec = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        print(json.dumps({"ok": False, "error": f"JSON 解析失败：{exc}"}, ensure_ascii=False))
+        return 1
+
+    # 四类，每类「我」和「她」各是一个列表。空=没写，按 0 记，但单独提示没写。
+    KEYS = ("initiate", "give", "emotion", "avoid")
+    mine: dict[str, list[str]] = {}
+    hers: dict[str, list[str]] = {}
+    missing: list[str] = []
+    for k in KEYS:
+        mv = rec.get("mine", {}).get(k) or []
+        hv = rec.get("hers", {}).get(k) or []
+        if not isinstance(mv, list) or not isinstance(hv, list):
+            print(json.dumps({"ok": False, "error": f"{k} 必须是字符串数组"}, ensure_ascii=False))
+            return 1
+        mine[k] = mv
+        hers[k] = hv
+        if not mv and not hv:
+            missing.append(k)
+
+    # 计分语义统一为「你的投入 - 她的投入」的净差，正数 = 你多她少。
+    # 前三类：你的条数减她的条数。
+    # avoid 反过来：她逃避 = 她投入更少 = 你相对更多，所以 hers_avoid 要「加」到你这边；
+    #            你逃避 = 你在退，要「减」。
+    score = 0
+    detail: list[dict] = []
+    for k, label in (("initiate", "主动发起"), ("give", "实际付出"), ("emotion", "情绪投入")):
+        d = len(mine[k]) - len(hers[k])
+        score += d
+        detail.append({"axis": label, "mine": len(mine[k]), "hers": len(hers[k]), "diff": d})
+    # avoid：diff 记为「她逃避数 - 你逃避数」，她逃避得越多，diff 越正，越偏「你多她少」。
+    avd = len(hers["avoid"]) - len(mine["avoid"])
+    score += avd
+    detail.append({"axis": "回避逃避", "mine": len(mine["avoid"]), "hers": len(hers["avoid"]), "diff": avd})
+
+    # score 越大 = 你投入越多而她越少（单向）；接近 0 = 有来有往；负数 = 她多你少。
+    if score <= 1:
+        tier = "有来有往"
+        note = "两边投入大致对等（或她那边更主动）。别用这个命令去挑刺——对等时继续按正常流程走就行。"
+    elif score <= 5:
+        tier = "你多她少"
+        note = "你这边的投入明显多于她。先别急着下「她不在乎」的结论——可能是阶段使然，也可能她投入的方式和你不一样。值得留意，但不必立刻收手。"
+    else:
+        tier = "几乎单向"
+        note = "绝大部分投入来自你这边，她几乎没有实质回应。这是需要正视的事实。继续单方面加码，只会让你越来越累，而她未必因此更投入。该往回收了——先把你的力气和期待收回来，看她会不会主动补一点。"
+
+    out = {
+        "ok": True,
+        "tier": tier,
+        "score": score,
+        "detail": detail,
+        "note": note,
+        "missing": missing or None,
+        "checked": ["主动发起", "实际付出", "情绪投入", "回避逃避"],
+        "红线": "这里只摆事实，不下「她爱不爱你」「该不该分」的判断；结果不进候选输出。",
+    }
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    return 0
 
 
 def cmd_verify(args) -> int:
@@ -1719,6 +1811,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--file", default="", help="决策记录 JSON 文件")
     p.add_argument("--json", default="", help="决策记录 JSON 字符串（和 --file 二选一）")
     p.set_defaults(func=cmd_trace)
+
+    p = sub.add_parser("balance", help="投入对账：摆两边客观行为，看是不是单向")
+    p.add_argument("--json", default="", help="行为记录 JSON（mine/hers 各四类）")
+    p.set_defaults(func=cmd_balance)
 
     args = ap.parse_args(argv)
     return args.func(args)
