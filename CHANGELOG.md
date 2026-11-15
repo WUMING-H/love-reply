@@ -2,6 +2,24 @@
 
 格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [未发布]
+
+### 工程：profile_tool 按层拆分
+
+`profile_tool.py` 从 1938 行单文件拆成包结构，不改任何行为，纯降技术债。
+
+- **拆成五层**：`constants.py`（常量与元数据）、`storage.py`（存储 + 检索）、
+  `render.py`（摘要渲染块）、`guard.py`（守门 + 信号判断）、`commands.py`（26 个命令）、
+  `cli.py`（参数解析与分发）。
+- **兼容性零破坏**：包 `__init__.py` re-export 全部符号，`import profile_tool` 及
+  `profile_tool.main / guard / load / STAGE` 等访问路径全部不变；`scripts/profile_tool.py`
+  保留为薄壳入口，`python scripts/profile_tool.py <子命令>` 的调用方式照旧，文档和 CI 一行不改。
+- **校验与评测零回归**：完整性自检全绿、评测集 31 条 93/36 全对。
+
+### 收尾：知识库深度治理
+
+`practical` 系列已全部转为「原则 + 结构」形态，无成品句/标注残留，任务 #17 关闭。
+
 ## [0.15.0] — 2026-11-14
 
 ### 复盘回流：reflect 命令
