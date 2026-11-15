@@ -809,17 +809,19 @@ def cmd_reflect(args) -> int:
     actions: list[str] = []
     notes: list[str] = []
 
-    # 1 易错点落档
+    # 1 易错点落档。同一坑重复踩，count 累加——踩得越多，brief/verify 提醒越重。
     if trap:
         data = load(slot)
         pitfalls = data.setdefault("pitfalls", [])
         dup = next((p for p in pitfalls if p.get("text") == trap), None)
         if dup:
+            dup["count"] = int(dup.get("count", 1)) + 1
             dup["added"] = today().isoformat()
-            actions.append(f"易错点已存在，刷新日期：{trap}")
+            actions.append(f"易错点已重复踩（第 {dup['count']} 次），提醒升级：{trap}")
         else:
             pid = f"x{len(pitfalls) + 1}"
-            pitfalls.append({"id": pid, "text": trap, "added": today().isoformat()})
+            pitfalls.append({"id": pid, "text": trap, "count": 1,
+                             "added": today().isoformat()})
             actions.append(f"易错点已落档（{pid}）：{trap}")
         save(slot, data)
 
@@ -972,6 +974,7 @@ def cmd_verify(args) -> int:
         "group_problems": group,
         "total_chars": total_chars,
         "candidate_budget": CANDIDATE_BUDGET,
+        "pitfalls": pitfall_block(slot_data or {}),
         "summary": {
             "pass": len(passed), "fail": len(rows) - len(passed),
             "next": nxt,

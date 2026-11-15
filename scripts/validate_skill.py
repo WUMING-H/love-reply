@@ -981,6 +981,25 @@ def check_reflect() -> None:
         if "[易错]" not in buf.getvalue() or "加班当普通累" not in buf.getvalue():
             errors.append("reflect 落了易错点，但 brief 没带出提醒")
 
+        # 同一坑再踩一次，count 累加、brief 升级为 [反复栽]
+        rec2 = run(["reflect", "--slot", "rf", "--json",
+                    '{"slot":"rf","trap":"把加班当普通累，给了一堆方案"}'])
+        if not any("重复踩" in a for a in rec2.get("actions", [])):
+            errors.append("reflect 重复踩同一坑没触发 count 累加")
+        buf2 = io.StringIO()
+        with contextlib.redirect_stdout(buf2):
+            profile_tool.main(["brief", "--slot", "rf", "--query", "她又说累"])
+        if "[反复栽]" not in buf2.getvalue():
+            errors.append("同一坑踩两次后 brief 没升级为 [反复栽]")
+
+        # verify 输出要带 pitfalls 字段（写候选时就能看到坑）
+        vrec = run(["verify", "--slot", "rf", "--stage", "couple_early",
+                    "--candidate", "care:先别管方案了 你歇会"])
+        if "pitfalls" not in vrec:
+            errors.append("verify 输出缺 pitfalls 字段")
+        elif not vrec["pitfalls"]:
+            errors.append("verify 的 pitfalls 为空，没带出已踩的坑")
+
         # 红线：trap 是「模型判断错了」，不能写成「她这人怎么这样」。
         # reflect 的落档内容里不许出现定性词。
         with open(os.path.join(tmp, "profile", "rf.json"), encoding="utf-8") as f:

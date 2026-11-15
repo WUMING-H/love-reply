@@ -115,7 +115,7 @@ python <skill>/scripts/profile_tool.py verify --slot couple_early \
 
 他选了哪条就记一行 `style_tool.py feedback --slot <槽位> --kind chosen --strategy minimal --ai "<他选的>"`——这是风格层唯一的反馈信号，攒够五票 `verify` 多一行 `habit`，**只影响排序，不改闸门**。问题清单与数据目录见 `references/profile.md` 7.5。
 
-这次踩了坑、漏了她说过的事实、或你改写了候选，跑一次 `profile_tool.py reflect` 把「错在哪」记下来——`brief` 下次会带一句「易错」提醒，别在同一个地方再栽。细则见 `references/reflect.md`。
+这次踩了坑、漏了她说过的事实、或你改写了候选，跑一次 `profile_tool.py reflect` 把「错在哪」记下来——`brief` 和 `verify` 下次会带出提醒，同一坑反复踩提醒会升级，别在同一个地方再栽。细则见 `references/reflect.md`。
 
 ## 输出格式
 

@@ -102,6 +102,7 @@ def pitfall_block(data: dict) -> list[str]:
     """最近踩过的坑（易错点）的提醒。
 
     来自 reflect 落档的 trap：模型上一次在这里判断错了，下次别在同一个地方栽跟头。
+    按踩坑次数分级：踩 1 次是 [易错] 软提醒，踩 2 次及以上是 [反复栽] 重提醒。
     只带最近两条，作为提醒不占「她」的记忆额度；它不是判断依据，不改 danger、
     不改阶段闸门，只让模型「这次注意」。空档案时没有。
     """
@@ -109,4 +110,10 @@ def pitfall_block(data: dict) -> list[str]:
     if not pitfalls:
         return []
     recent = sorted(pitfalls, key=lambda p: p.get("added", ""), reverse=True)[:2]
-    return [f"[易错] {p['text']}" for p in recent]
+    out = []
+    for p in recent:
+        if int(p.get("count", 1)) >= 2:
+            out.append(f"[反复栽] {p['text']}（已踩 {p['count']} 次，写之前先停下确认）")
+        else:
+            out.append(f"[易错] {p['text']}")
+    return out
